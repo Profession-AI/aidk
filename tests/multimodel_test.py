@@ -1,5 +1,5 @@
-from monoai.models import MultiModel
-from monoai.prompts.prompt_chain import PromptChain
+from aidk.models import MultiModel
+from aidk.prompts.prompt_chain import PromptChain
 
 multi_model = MultiModel(
     models=[

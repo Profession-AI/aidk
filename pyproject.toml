@@ -3,9 +3,9 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "monoai"
-version = "0.0.25"
-description = "MonoAI - The complete framework to build AI-powered applications"
+name = "aidk"
+version = "0.0.1"
+description = "AIDK - The complete framework to build AI-powered applications"
 authors = [
   { name = "ProfessionAI Tech", email = "tech@profession.ai" }
 ]
@@ -26,8 +26,8 @@ dependencies = [
 Homepage = "https://github.com/Profession-AI/MONOAI"
 
 [project.scripts]
-monoai = "monoai.cli:cli_app"
+aidk = "aidk.cli:cli_app"
 
 [tool.setuptools.packages.find]
-include = ["monoai*"]
+include = ["aidk*"]
 exclude = ["static*", "prompts*", "tests*", "docs*", "histories*", "venv*", "__pycache__*"]

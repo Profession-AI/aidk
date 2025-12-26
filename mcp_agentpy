@@ -6,10 +6,10 @@ def callback(content):
         print(content["tool_call"])
 
 
-from monoai.models import Model
-from monoai.agents import Agent
-from monoai.tools.websearch import search_web_with_tavily
-from monoai.mcp.mcp_server import McpServer
+from aidk.models import Model
+from aidk.agents import Agent
+from aidk.tools.websearch import search_web_with_tavily
+from aidk.mcp.mcp_server import McpServer
 
 model = Model(provider="openai", model="gpt-4o-mini")
 mcp = McpServer("coingecko", "http", server_url="https://mcp.api.coingecko.com/sse")

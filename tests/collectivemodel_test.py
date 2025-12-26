@@ -1,5 +1,5 @@
-from monoai.models import CollectiveModel
-from monoai.prompts.prompt_chain import PromptChain
+from aidk.models import CollectiveModel
+from aidk.prompts.prompt_chain import PromptChain
 
 collective_model = CollectiveModel(
     models=[

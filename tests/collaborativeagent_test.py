@@ -1,6 +1,6 @@
-from monoai._agents import CollaborativeAgent
-from monoai.prompts.prompt_chain import PromptChain
-from monoai.tools import WebSearch
+from aidk._agents import CollaborativeAgent
+from aidk.prompts.prompt_chain import PromptChain
+from aidk.tools import WebSearch
 
 
 collaborative_agent = CollaborativeAgent(

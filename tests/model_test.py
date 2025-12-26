@@ -1,5 +1,5 @@
-from monoai.models import Model
-from monoai.prompts.prompt_chain import PromptChain
+from aidk.models import Model
+from aidk.prompts.prompt_chain import PromptChain
 
 model = Model(
     provider="openai",

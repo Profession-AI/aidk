@@ -1,0 +1,9 @@
+# Example providers.keys file
+# Copy this to 'providers.keys' and replace the placeholders with your real keys.
+# NOTE: Do NOT commit your 'providers.keys' file to git. It's intentionally ignored.
+
+# Format:
+# PROVIDER_NAME=API_KEY
+OPENAI=sk-your-openai-key
+DEEPSEA=sk-your-deepsea-key
+TAVILY=sk-your-tavily-key
