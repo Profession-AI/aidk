@@ -96,9 +96,9 @@ class PromptChain(Prompt):
             The formatted prompt text with optional context
         """
         if context is None:
-            return str(self._prompts[index])
+            return Prompt(prompt=self._prompts[index])
         else:
-            return str(self._prompts[index]) + "\n\n" + context
+            return Prompt(prompt=str(self._prompts[index]) + "\n\n" + context)
 
     def __str__(self) -> str:
         """

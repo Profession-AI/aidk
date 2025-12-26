@@ -1,12 +1,17 @@
+"""Collaborative model for decision making across multiple AI models."""
+
+import asyncio
+from typing import Dict, List, Union
+
+from ..prompts.prompt import Prompt
+from ..prompts.prompt_chain import PromptChain
+
 from ._base_model import BaseModel
-from .model import Model
-from .multi_model import MultiModel
 from ._prompt_executor import PromptExecutorMixin
 from ._response_processor import ResponseProcessorMixin
-from typing import List, Dict, Union
-import asyncio
-from ..prompts.prompt_chain import PromptChain
-from ..prompts.prompt import Prompt
+from .model import Model
+from .multi_model import MultiModel
+
 
 class CollaborativeModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin):
     """
@@ -36,9 +41,7 @@ class CollaborativeModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin)
     def __init__(
         self,
         models: List[Dict[str, str]],
-        aggregator: Dict[str, str],
-        count_tokens: bool = False,
-        count_cost: bool = False
+        aggregator: Dict[str, str]
     ):
         """
         Initialize a new CollaborativeModel instance.
@@ -49,27 +52,21 @@ class CollaborativeModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin)
             List of dictionaries with provider and model information
         aggregator : Dict[str, str]
             Dictionary with provider and model information for the aggregator
-        count_tokens : bool, optional
-            Whether to count tokens for each request
-        count_cost : bool, optional
-            Whether to calculate costs for each request
         """
-        super().__init__(count_tokens, count_cost)
+        super().__init__()
 
         self._multi_model = MultiModel(
-            models=models,
-            count_tokens=count_tokens,
-            count_cost=count_cost
+            models=models
         )
 
         self._aggregator = Model(
             provider=aggregator['provider'],
-            model=aggregator['model'],
-            count_tokens=count_tokens,
-            count_cost=count_cost
+            model=aggregator['model']
         )
 
-    def _format_aggregator_prompt(self, prompt: Union[str, Prompt, PromptChain], responses: List[Dict]) -> str:
+    def _format_aggregator_prompt(
+        self, prompt: Union[str, Prompt, PromptChain], responses: List[Dict]
+    ) -> str:
         """
         Format the prompt for the aggregator model.
 
@@ -88,15 +85,19 @@ class CollaborativeModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin)
         """
         prompt_text = str(prompt)
         model_responses = "\n\n".join([
-            f"Model {i+1} ({response['model']['provider']} - {response['model']['name']}):\n{response['response']}"
+            f"Model {i+1} ({response['model']['provider']} - "
+            f"{response['model']['name']}):\n{response['response']}"
             for i, response in enumerate(responses)
         ])
-        
-        return f"""Please analyze the following responses from different models and provide a comprehensive answer:
-                    Original Question: {prompt_text}
-                    Model Responses:
-                    {model_responses}
-                    Please provide a well-reasoned response that takes into account all the information above."""
+
+        return (
+            f"Please analyze the following responses from different models "
+            f"and provide a comprehensive answer:\n"
+            f"Original Question: {prompt_text}\n"
+            f"Model Responses:\n{model_responses}\n"
+            f"Please provide a well-reasoned response that takes into account "
+            f"all the information above."
+        )
 
     async def _ask_async(self, prompt: Union[str, Prompt, PromptChain]) -> Dict:
         """
@@ -127,20 +128,18 @@ class CollaborativeModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin)
             ...     print(f"{resp['model']['name']}: {resp['response']}")
         """
         # Get responses from all models
-        model_responses = await self._multi_model.ask_async(prompt)
-        
+        model_responses = await self._multi_model._ask_async(prompt)
+
         # Get aggregator response
         aggregator_prompt = self._format_aggregator_prompt(prompt, model_responses)
-        aggregator_response = await self._execute_async(aggregator_prompt, self._aggregator._agent)
-        
+        aggregator_response = await self._execute_async(
+            aggregator_prompt, metadata=None
+        )
+
         # Process aggregator response
         processed_aggregator = self._process_response(
             aggregator_prompt,
-            aggregator_response,
-            self._aggregator.provider,
-            self._aggregator.model,
-            self._count_tokens,
-            self._count_cost
+            aggregator_response
         )
 
         processed_aggregator["individual_responses"] = model_responses
@@ -167,5 +166,4 @@ class CollaborativeModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin)
             - individual_responses: List of responses from individual models
 
         """
-        return asyncio.run(self.ask_async(prompt))
-
+        return asyncio.run(self._ask_async(prompt))

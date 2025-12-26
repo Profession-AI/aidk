@@ -1,5 +1,9 @@
+"""Image model for AI image generation."""
+
 from openai import OpenAI
+
 from ..keys.keys_manager import load_key
+
 
 class ImageModel:
     """
@@ -41,15 +45,17 @@ class ImageModel:
             raise ValueError(f"Provider {provider} not supported")
         if model.lower() != "dall-e-3":
             raise ValueError(f"Model {model} not supported")
-        
+
         load_key(provider)
         self._client = OpenAI()
 
-    def generate(self, 
-                prompt: str, 
-                size: str = "1024x1024", 
-                quality: str = "standard", 
-                n: int = 1) -> dict:
+    def generate(
+        self,
+        prompt: str,
+        size: str = "1024x1024",
+        quality: str = "standard",
+        n: int = 1
+    ) -> dict:
         """
         Generate images from a text prompt.
 
@@ -84,6 +90,3 @@ class ImageModel:
             n=n,
         )
         return response
-
-
-

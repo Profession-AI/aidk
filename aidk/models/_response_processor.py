@@ -1,7 +1,10 @@
-from typing import Dict
-from ..prompts.prompt import Prompt
+"""Response processor mixin for handling model responses."""
+
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Dict
+
+from ..prompts.prompt import Prompt
 
 @dataclass
 class Model:
@@ -44,24 +47,22 @@ class ModelStreamTail:
     usage: ModelUsage
 
 class ResponseProcessorMixin:
+    """Mixin class to handle response processing."""
+
     def _process_response(
         self,
         prompt: Prompt,
         response: Dict
     ) -> ModelResponse:
         """
-        Process the response and add optional token and cost information.
-        
+        Process the response and add token and cost information.
+
         Args:
-            question: The input question
-            answer: The model's answer
-            provider: Name of the provider
-            model: Name of the model
-            count_tokens: Whether to count tokens
-            count_cost: Whether to calculate costs
-            
+            prompt: The input prompt
+            response: The model's response
+
         Returns:
-            Dictionary containing the response and optional stats
+            ModelResponse containing the response and usage stats
         """
 
         return ModelResponse(
@@ -84,7 +85,7 @@ class ResponseProcessorMixin:
     def _process_stream_chunk(self, chunk):
         return ModelStreamChunk(
             delta=chunk.choices[0].delta.content)
-    
+
     def _process_stream_tail(self, chunk, prompt, response):
         return ModelStreamTail(
             prompt = str(prompt),
@@ -94,6 +95,10 @@ class ResponseProcessorMixin:
                 completion_tokens=chunk.usage.completion_tokens,
                 prompt_tokens=chunk.usage.prompt_tokens,
                 total_tokens=chunk.usage.total_tokens,
-                cost = round(Decimal(chunk._hidden_params["response_cost"]), 8) if chunk._hidden_params["response_cost"]!=None else None
+                cost=(
+                    round(Decimal(chunk._hidden_params["response_cost"]), 8)
+                    if chunk._hidden_params["response_cost"] is not None
+                    else None
+                )
             ),
         )

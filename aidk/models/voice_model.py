@@ -1,40 +1,49 @@
-from litellm import speech
-from ..keys.keys_manager import load_key
+"""Voice model for text-to-speech using AI voice models."""
+
 import base64
 import os
+
+from litellm import speech
+
+from ..keys.keys_manager import load_key
+
 
 class VoiceModel:
     """
     A class for text-to-speech using various AI voice models.
-    
+
     VoiceModel provides an interface for converting text to speech using different
     AI voice providers. Currently supports ElevenLabs and OpenAI voice models.
-            
+
     Examples
     --------
     Basic usage with ElevenLabs:
-    >>> model = VoiceModel(provider="elevenlabs", model="eleven_multilingual_v2", voice="21m00Tcm4TlvDq8ikWAM")
+    >>> model = VoiceModel(
+    ...     provider="elevenlabs",
+    ...     model="eleven_multilingual_v2",
+    ...     voice="21m00Tcm4TlvDq8ikWAM"
+    ... )
     >>> audio_file = model.speak("Hello, world!")
-    
+
     Using different return types:
     >>> # Save as MP3 file
     >>> audio_file = model.speak("Hello, world!", return_type="output.mp3")
-    
+
     >>> # Get as base64 string
     >>> audio_b64 = model.speak("Hello, world!", return_type="base64")
-    
+
     >>> # Get as bytes
     >>> audio_bytes = model.speak("Hello, world!", return_type="bytes")
-    
+
     Streaming audio generation:
     >>> async for audio_chunk in model.stream("Long text to convert to speech"):
     ...     print(f"Generated audio chunk: {audio_chunk}")
     """
-    
+
     def __init__(self, provider: str, model: str, voice: str):
         """
         Initialize a new VoiceModel instance.
-        
+
         Parameters
         ----------
         provider : str
@@ -43,7 +52,7 @@ class VoiceModel:
             The specific voice model to use
         voice : str
             The voice ID or voice name to use for speech generation
-            
+
         Raises
         ------
         ImportError
@@ -53,15 +62,18 @@ class VoiceModel:
         self._provider = provider
         self._model = model
         self._voice = voice
-        
+
         if self._provider == "elevenlabs":
             try:
                 from elevenlabs.client import ElevenLabs
-            except ImportError:
-                raise ImportError("elevenlabs is not installed. Please install it with 'pip install elevenlabs'")
+            except ImportError as exc:
+                raise ImportError(
+                    "elevenlabs is not installed. "
+                    "Please install it with 'pip install elevenlabs'"
+                ) from exc
 
             self._client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
-        
+
     def speak(self, text: str, min_chars_per_sentence=100, return_type="audio.mp3"):
         """
         Convert text to speech and return the audio in the specified format.
@@ -97,7 +109,11 @@ class VoiceModel:
             
         Examples
         --------
-        >>> model = VoiceModel(provider="elevenlabs", model="eleven_multilingual_v2", voice="21m00Tcm4TlvDq8ikWAM")
+        >>> model = VoiceModel(
+        ...     provider="elevenlabs",
+        ...     model="eleven_multilingual_v2",
+        ...     voice="21m00Tcm4TlvDq8ikWAM"
+        ... )
         >>> # Save to file
         >>> audio_file = model.speak("Hello, world!", return_type="output.mp3")
         >>> # Get as base64
@@ -107,35 +123,32 @@ class VoiceModel:
         """
         audio_groups = self._generate_audio_groups(text, min_chars_per_sentence)
         audio_chunks = []
-        
+
         for group in audio_groups:
-            
             response = self._generate(group)
-            
             audio_chunks.append(response)
-        
+
         if return_type.endswith(".mp3") or return_type.endswith(".wav"):
             combined_audio = self._combine_bytes_chunks(audio_chunks)
             with open(return_type, 'wb') as f:
                 f.write(combined_audio)
             return return_type
-        elif return_type == "base64":
+        if return_type == "base64":
             combined_audio = self._combine_bytes_chunks(audio_chunks)
             return base64.b64encode(combined_audio).decode('utf-8')
-        elif return_type == "bytes":
+        if return_type == "bytes":
             return self._combine_bytes_chunks(audio_chunks)
-        else:
-            raise ValueError(f"Invalid return type: {return_type}")
-    
+        raise ValueError(f"Invalid return type: {return_type}")
+
     def _combine_bytes_chunks(self, audio_chunks: list) -> bytes:
         """
         Combine audio chunks into a single bytes object.
-        
+
         Parameters
         ----------
         audio_chunks : list
             List of audio byte chunks to combine
-            
+
         Returns
         -------
         bytes
@@ -145,7 +158,7 @@ class VoiceModel:
         for chunk in audio_chunks:
             combined += chunk
         return combined
-    
+
     def _generate_audio_groups(self, text: str, min_chars_per_sentence: int):
         """
         Generate optimized sentence groups for audio generation.
@@ -168,30 +181,30 @@ class VoiceModel:
         sentences = [s.strip() for s in text.split(".") if s.strip()]
         audio_groups = []
         i = 0
-        
+
         while i < len(sentences):
             current_group = sentences[i]
             j = i + 1
-            
+
             # Continue adding subsequent sentences until min_chars_per_sentence is exceeded
             while j < len(sentences):
                 next_sentence = sentences[j]
                 combined_length = len(current_group + ". " + next_sentence)
-                
+
                 # If the combination exceeds the limit, stop
                 if combined_length > min_chars_per_sentence:
                     break
-                
+
                 # Otherwise, join the next sentence
                 current_group += ". " + next_sentence
                 j += 1
-            
+
             audio_groups.append(current_group)
             # Move to the next unprocessed sentence
             i = j
-        
+
         return audio_groups
-        
+
     def _generate(self, text):
         """
         Generate audio from text using the configured provider.
@@ -217,14 +230,13 @@ class VoiceModel:
             for r in response:
                 response_bytes += r
             return response_bytes
-        else:
-            response = speech(
-                model=self._provider+"/"+self._model,
-                voice=self._voice,
-                input=text,
-            )
-            return response.content
-    
+        response = speech(
+            model=self._provider + "/" + self._model,
+            voice=self._voice,
+            input=text,
+        )
+        return response.content
+
     async def stream(self, text: str, min_chars_per_sentence=100, return_type="audio.mp3"):
         """
         Stream audio generation for long texts.
@@ -261,12 +273,16 @@ class VoiceModel:
             
         Examples
         --------
-        >>> model = VoiceModel(provider="elevenlabs", model="eleven_multilingual_v2", voice="21m00Tcm4TlvDq8ikWAM")
+        >>> model = VoiceModel(
+        ...     provider="elevenlabs",
+        ...     model="eleven_multilingual_v2",
+        ...     voice="21m00Tcm4TlvDq8ikWAM"
+        ... )
         >>> async for audio_chunk in model.stream("Long text to convert to speech"):
         ...     print(f"Generated audio chunk: {audio_chunk}")
         """
         audio_groups = self._generate_audio_groups(text, min_chars_per_sentence)
-        
+
         for _, group in enumerate(audio_groups):
             # Generate audio for the sentence group
             response = self._generate(group)

@@ -1,11 +1,16 @@
+"""Multi model for parallel execution across multiple AI models."""
+
+import asyncio
+from typing import Dict, List, Union
+
+from ..prompts.prompt import Prompt
+from ..prompts.prompt_chain import PromptChain
+
 from ._base_model import BaseModel
-from .model import Model
 from ._prompt_executor import PromptExecutorMixin
 from ._response_processor import ResponseProcessorMixin
-from typing import List, Dict, Union
-import asyncio
-from ..prompts.prompt_chain import PromptChain
-from ..prompts.prompt import Prompt
+from .model import Model
+
 
 class MultiModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin):
     """
@@ -35,10 +40,8 @@ class MultiModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin):
     """
 
     def __init__(
-        self, 
-        models: List[Dict[str, str]], 
-        count_tokens: bool = False, 
-        count_cost: bool = False
+        self,
+        models: List[Dict[str, str]]
     ):
         """
         Initialize a new MultiModel instance.
@@ -47,18 +50,12 @@ class MultiModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin):
         ----------
         models : List[Dict[str, str]]
             List of dictionaries with provider and model information
-        count_tokens : bool, optional
-            Whether to count tokens for each request
-        count_cost : bool, optional
-            Whether to calculate costs for each request
         """
-        super().__init__(count_tokens, count_cost)
+        super().__init__()
         self._models = [
             Model(
                 provider=model['provider'],
-                model=model['model'],
-                count_tokens=count_tokens,
-                count_cost=count_cost
+                model=model['model']
             ) for model in models
         ]
 
@@ -83,14 +80,10 @@ class MultiModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin):
             - tokens: Token counts (if enabled)
             - cost: Cost calculation (if enabled)
         """
-        response = await self._execute_async(prompt, model._agent)
+        response = await self._execute_async(prompt, metadata=None)
         return self._process_response(
             prompt,
-            response,
-            model.provider,
-            model.model,
-            self._count_tokens,
-            self._count_cost
+            response
         )
 
     async def _ask_async(self, prompt: Union[str, Prompt, PromptChain]) -> List[Dict]:
@@ -142,20 +135,18 @@ class MultiModel(BaseModel, PromptExecutorMixin, ResponseProcessorMixin):
             - cost: Cost calculation (if enabled)
 
         """
-        return asyncio.run(self.ask_async(prompt))
+        return asyncio.run(self._ask_async(prompt))
 
 
 if __name__ == "__main__":
-    # Initialize with counting preferences
+    # Initialize multi model
     multi_model = MultiModel(
         models=[
             {'provider': 'openai', 'model': 'gpt-4o-mini'},
             {'provider': 'deepseek', 'model': 'deepseek-chat'},
-        ],
-        count_tokens=True,
-        count_cost=True
+        ]
     )
-    
+
     # Example with simple prompt
     results = multi_model.ask("What is the capital of France?")
     print("\nSimple prompt results:")
@@ -172,7 +163,7 @@ if __name__ == "__main__":
             print(f"Input cost: ${result['cost']['input_cost']:.6f}")
             print(f"Output cost: ${result['cost']['output_cost']:.6f}")
             print(f"Total cost: ${result['cost']['total_cost']:.6f}")
-    
+
     # Example with prompt chain
     chain = PromptChain([
         "What is the capital of France?",

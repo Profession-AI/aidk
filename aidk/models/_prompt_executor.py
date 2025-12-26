@@ -1,25 +1,34 @@
-from typing import Dict, Union, AsyncGenerator
+"""Prompt executor mixin for handling prompt execution."""
+
+import logging
 import types
+from typing import Dict, Union, AsyncGenerator
+
+import litellm
+from litellm import acompletion, completion
+from mcp.types import Tool as MCPTool
+from pydantic import BaseModel
+
+from ..conf import Conf
+from ..mcp._mcp_tool_parser import McpToolParser
+from ..prompts.iterative_prompt import IterativePrompt
 from ..prompts.prompt import Prompt
 from ..prompts.prompt_chain import PromptChain
-from ..prompts.iterative_prompt import IterativePrompt
 from ..tools._tool_parser import ToolParser
-from ..mcp._mcp_tool_parser import McpToolParser
-from mcp.types import Tool as MCPTool
-from ..conf import Conf
-import litellm
 
 class PromptExecutorMixin:
     """Mixin class to handle prompt execution."""
 
     def _setup_observability(self):
         observability = Conf()["observability"]
-        if (len(observability) > 0):
-            litellm.success_callback = observability 
-            litellm.failure_callback = observability 
+        if len(observability) > 0:
+            litellm.success_callback = observability
+            litellm.failure_callback = observability
 
 
-    async def _execute_stream(self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = None) -> AsyncGenerator[Dict, None]:
+    async def _execute_stream(
+        self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = None
+    ) -> AsyncGenerator[Dict, None]:
         """
         Execute a prompt asynchronously with streaming.
         
@@ -48,13 +57,15 @@ class PromptExecutorMixin:
             async for chunk in self._execute_iterative_stream(prompt, metadata):
                 yield chunk
         elif isinstance(prompt, Prompt):
-            async for chunk in self._completion_stream(str(prompt), response_type=prompt.response_type, metadata=metadata):
+            async for chunk in self._completion_stream(
+                str(prompt), response_type=prompt.response_type, metadata=metadata
+            ):
                 yield chunk
         else:
             async for chunk in self._completion_stream(prompt, metadata=metadata):
                 yield chunk
-    
-    def _execute(self, prompt: Union[Prompt, PromptChain], metadata: Dict = {}) -> Dict:
+
+    def _execute(self, prompt: Union[Prompt, PromptChain], metadata: Dict = None) -> Dict:
         """
         Execute a prompt synchronously.
         
@@ -74,14 +85,17 @@ class PromptExecutorMixin:
                 documents = '\n'.join(documents)
                 prompt += Conf()["default_prompt"]["rag"] + documents
 
+        if metadata is None:
+            metadata = {}
         if isinstance(prompt, PromptChain):
             return self._execute_chain(prompt, metadata)
-        elif isinstance(prompt, IterativePrompt):
+        if isinstance(prompt, IterativePrompt):
             return self._execute_iterative(prompt, metadata)
-        else:
-            return self._completion(prompt, metadata=metadata)
+        return self._completion(prompt, metadata=metadata)
 
-    async def _execute_async(self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = None) -> Dict:
+    async def _execute_async(
+        self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = None
+    ) -> Dict:
         """
         Execute a prompt asynchronously.
         
@@ -103,14 +117,17 @@ class PromptExecutorMixin:
 
         if isinstance(prompt, PromptChain):
             return await self._execute_chain_async(prompt, metadata)
-        elif isinstance(prompt, IterativePrompt):
+        if isinstance(prompt, IterativePrompt):
             return await self._execute_iterative_async(prompt, metadata)
-        elif isinstance(prompt, Prompt):
-            return await self._completion_async(str(prompt), response_type=prompt.response_type, metadata=metadata)
-        else:
-            return await self._completion_async(prompt, metadata=metadata)
+        if isinstance(prompt, Prompt):
+            return await self._completion_async(
+                str(prompt), response_type=prompt.response_type, metadata=metadata
+            )
+        return await self._completion_async(prompt, metadata=metadata)
 
-    async def _execute_chain_async(self, chain: PromptChain, metadata: Dict = None) -> Dict:
+    async def _execute_chain_async(
+        self, chain: PromptChain, metadata: Dict = None
+    ) -> Dict:
         """
         Execute a prompt chain asynchronously.
         
@@ -127,7 +144,9 @@ class PromptExecutorMixin:
             response = await self._completion_async(current_prompt, metadata=metadata)
         return response
 
-    async def _execute_chain_stream(self, chain: PromptChain, metadata: Dict = None) -> AsyncGenerator[Dict, None]:
+    async def _execute_chain_stream(
+        self, chain: PromptChain, metadata: Dict = None
+    ) -> AsyncGenerator[Dict, None]:
         """
         Execute a prompt chain asynchronously with streaming.
         
@@ -160,10 +179,12 @@ class PromptExecutorMixin:
         """
         response = None
         for i in range(chain._size):
-            current_prompt = chain._format(i, response["choices"][0]["message"]["content"] if response else None)
+            current_prompt = chain._format(
+                i, response["choices"][0]["message"]["content"] if response else None
+            )
             response = self._completion(current_prompt, metadata=metadata)
         return response
-    
+
     def _execute_iterative(self, prompt: IterativePrompt, metadata: Dict = None) -> Dict:
         """
         Execute an iterative prompt synchronously.
@@ -177,12 +198,13 @@ class PromptExecutorMixin:
         """
         response = ""
         memory = ""
+        current_response = None
         for i in range(prompt._size):
             if i > 0 and prompt._has_memory:
                 if prompt._retain_all:
                     memory += current_response
                 else:
-                    memory = current_response   
+                    memory = current_response
                 current_prompt = prompt._format(i, memory)
             else:
                 current_prompt = prompt._format(i)
@@ -191,7 +213,9 @@ class PromptExecutorMixin:
             response += current_response
         return response
 
-    async def _execute_iterative_stream(self, prompt: IterativePrompt, metadata: Dict = None) -> AsyncGenerator[Dict, None]:
+    async def _execute_iterative_stream(
+        self, prompt: IterativePrompt, metadata: Dict = None
+    ) -> AsyncGenerator[Dict, None]:
         """
         Execute an iterative prompt asynchronously with streaming.
         
@@ -204,18 +228,21 @@ class PromptExecutorMixin:
         """
         response = ""
         memory = ""
+        current_response = None
         for i in range(prompt._size):
             if i > 0 and prompt._has_memory:
                 if prompt._retain_all:
                     memory += current_response
                 else:
-                    memory = current_response   
+                    memory = current_response
                 current_prompt = prompt._format(i, memory)
             else:
                 current_prompt = prompt._format(i)
-            
+
             if i == prompt._size - 1:  # Last iteration
-                async for chunk in self._completion_stream(current_prompt, metadata=metadata):
+                async for chunk in self._completion_stream(
+                    current_prompt, metadata=metadata
+                ):
                     yield chunk
             else:  # Execute non-streaming for intermediate iterations
                 current_response = self._completion(current_prompt, metadata=metadata)
@@ -229,58 +256,56 @@ class PromptExecutorMixin:
             mcp_tp = McpToolParser()
             for tool in self._tools:
                 if isinstance(tool, types.FunctionType):
-                    tools.append(tp.parse(tool))      
+                    tools.append(tp.parse(tool))
                 elif isinstance(tool, MCPTool):
                     tools.append(mcp_tp.parse(tool))
         return tools
 
-    def _completion(self, prompt: Prompt|list, response_type: str = None, metadata: Dict = {}) -> Dict:
-
+    def _completion(
+        self, prompt: Prompt | list, response_type: str = None, metadata: Dict = None
+    ) -> Dict:
+        """Execute a completion synchronously."""
         self._setup_observability()
-        from pydantic import BaseModel
+
+        if metadata is None:
+            metadata = {}
 
         class Response(BaseModel):
+            """Response model wrapper."""
+
             response: response_type
 
-        if response_type!=None:
+        if response_type is not None:
             response_type = Response
 
         self._disable_logging()
 
         url = None
-        model = self.provider+"/"+self.model
-        
-        if hasattr(self, "url") and self.url != None:
-            url = self.url+"/v"+str(self.version)
-            model = "hosted_vllm/"+model
-        
-        tools = self._get_tools()
+        model = self.provider + "/" + self.model
 
-        if isinstance(prompt, Prompt):  
+        if hasattr(self, "url") and self.url is not None:
+            url = self.url + "/v" + str(self.version)
+            model = "hosted_vllm/" + model
+
+        tools = self._get_tools()
+        if isinstance(prompt, Prompt):
             messages = [prompt.as_dict()]
         else:
             messages = prompt
-        
-        """
-        if self._web_search:
-            web_search_config = {"search_context_size": self._web_search}
-        else:
-            web_search_config = None
-        """
-        
-        from litellm import completion
-        return completion(model=model, 
-                          messages=messages, 
-                          response_format=response_type,
-                          base_url = url,
-                          tools=tools,
-                          max_tokens=self._max_tokens,
-                          metadata=metadata,
-                          #web_search_options=web_search_config
-                          )
-                          
 
-    async def _completion_stream(self, prompt: str|list, response_type: str = None, metadata: Dict = None) -> AsyncGenerator[Dict, None]:
+        return completion(
+            model=model,
+            messages=messages,
+            response_format=response_type,
+            base_url=url,
+            tools=tools,
+            max_tokens=self._max_tokens,
+            metadata=metadata,
+        )
+
+    async def _completion_stream(
+        self, prompt: str | list, response_type: str = None, metadata: Dict = None
+    ) -> AsyncGenerator[Dict, None]:
         """
         Execute a streaming completion.
         
@@ -294,24 +319,23 @@ class PromptExecutorMixin:
         """
         self._setup_observability()
         url = None
-        model = self.provider+"/"+self.model
-        if hasattr(self, "url") and self.url != None:
-            url = self.url+"/v"+str(self.version)
-            model = "hosted_vllm/"+model
-        
+        model = self.provider + "/" + self.model
+        if hasattr(self, "url") and self.url is not None:
+            url = self.url + "/v" + str(self.version)
+            model = "hosted_vllm/" + model
+
         tools = self._get_tools()
 
         if isinstance(prompt, str):
-            messages = [{ "content": prompt,"role": "user"}]
+            messages = [{"content": prompt, "role": "user"}]
         else:
             messages = prompt
 
         self._disable_logging()
-        from litellm import acompletion
 
         response = await acompletion(
-            model=model, 
-            messages=messages, 
+            model=model,
+            messages=messages,
             response_format=response_type,
             base_url=url,
             stream=True,
@@ -319,11 +343,13 @@ class PromptExecutorMixin:
             metadata=metadata,
             tools=tools
         )
-        
+
         async for chunk in response:
             yield chunk
 
-    async def _execute_iterative_async(self, prompt: IterativePrompt, metadata: Dict = None) -> Dict:
+    async def _execute_iterative_async(
+        self, prompt: IterativePrompt, metadata: Dict = None
+    ) -> Dict:
         """
         Execute an iterative prompt asynchronously.
         
@@ -336,21 +362,26 @@ class PromptExecutorMixin:
         """
         response = ""
         memory = ""
+        current_response = None
         for i in range(prompt._size):
             if i > 0 and prompt._has_memory:
                 if prompt._retain_all:
                     memory += current_response
                 else:
-                    memory = current_response   
+                    memory = current_response
                 current_prompt = prompt._format(i, memory)
             else:
                 current_prompt = prompt._format(i)
-            current_response = await self._completion_async(current_prompt, metadata=metadata)
+            current_response = await self._completion_async(
+                current_prompt, metadata=metadata
+            )
 
             response += current_response
         return response
 
-    async def _completion_async(self, prompt: str|list, response_type: str = None, metadata: Dict = None) -> Dict:
+    async def _completion_async(
+        self, prompt: str | list, response_type: str = None, metadata: Dict = None
+    ) -> Dict:
         """
         Execute a completion asynchronously.
         
@@ -363,48 +394,49 @@ class PromptExecutorMixin:
             Dictionary containing the response
         """
         self._setup_observability()
-        from pydantic import BaseModel
 
         class Response(BaseModel):
+            """Response model wrapper."""
+
             response: response_type
 
-        if response_type!=None:
+        if response_type is not None:
             response_type = Response
 
         self._disable_logging()
 
         url = None
-        model = self.provider+"/"+self.model
-        
-        if hasattr(self, "url") and self.url != None:
-            url = self.url+"/v"+str(self.version)
-            model = "hosted_vllm/"+model
-        
+        model = self.provider + "/" + self.model
+
+        if hasattr(self, "url") and self.url is not None:
+            url = self.url + "/v" + str(self.version)
+            model = "hosted_vllm/" + model
+
         tools = None
 
         if hasattr(self, "_tools"):
             tools = []
             tp = ToolParser()
             for tool in self._tools:
-                tools.append(tp.parse(tool))      
+                tools.append(tp.parse(tool))
 
         if isinstance(prompt, str):
-            messages = [{ "content": prompt,"role": "user"}]
+            messages = [{"content": prompt, "role": "user"}]
         else:
             messages = prompt
 
-        from litellm import acompletion
-        return await acompletion(model=model, 
-                                messages=messages, 
-                                response_format=response_type,
-                                base_url = url,
-                                tools=tools,
-                                max_tokens=self._max_tokens,
-                                metadata=metadata)
-            
+        return await acompletion(
+            model=model,
+            messages=messages,
+            response_format=response_type,
+            base_url=url,
+            tools=tools,
+            max_tokens=self._max_tokens,
+            metadata=metadata
+        )
 
     def _disable_logging(self):
-        import logging
+        """Disable logging for specific loggers."""
         loggers = [
             "LiteLLM Proxy",
             "LiteLLM Router",
@@ -414,5 +446,4 @@ class PromptExecutorMixin:
 
         for logger_name in loggers:
             logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.CRITICAL + 1) 
-
+            logger.setLevel(logging.CRITICAL + 1)

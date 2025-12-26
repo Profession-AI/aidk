@@ -1,8 +1,10 @@
-from .model import Model
-from ._response_processor import ResponseProcessorMixin
+"""Hosted model for self-hosted AI language models."""
+
+from typing import Sequence
+
 from ._prompt_executor import PromptExecutorMixin
-from typing import Sequence, Dict, Union
-from ..keys.keys_manager import load_key
+from ._response_processor import ResponseProcessorMixin
+from .model import Model
 
 
 class HostedModel(Model, ResponseProcessorMixin, PromptExecutorMixin):
@@ -21,14 +23,11 @@ class HostedModel(Model, ResponseProcessorMixin, PromptExecutorMixin):
     """
 
     def __init__(
-        self, 
+        self,
         url: str,
         version: int = 1,
-        provider: str | None = None, 
-        model: str | None = None, 
-        system_prompt: str | Sequence[str] = (),
-        count_tokens: bool = False, 
-        count_cost: bool = False,
+        provider: str | None = None,
+        model: str | None = None,
         max_tokens: int = None
     ):
         """
@@ -40,12 +39,6 @@ class HostedModel(Model, ResponseProcessorMixin, PromptExecutorMixin):
             Name of the provider (e.g., 'openai', 'anthropic')
         model : str
             Name of the model (e.g., 'gpt-4', 'claude-3')
-        system_prompt : str | Sequence[str], optional
-            System prompt or sequence of prompts
-        count_tokens : bool, optional
-            Whether to count tokens for each request
-        count_cost : bool, optional
-            Whether to calculate costs for each request
         max_tokens : int, optional
             Maximum number of tokens for each request
         """
@@ -53,11 +46,8 @@ class HostedModel(Model, ResponseProcessorMixin, PromptExecutorMixin):
         super().__init__(
             provider=provider,
             model=model,
-            count_tokens=count_tokens, 
-            count_cost=count_cost, 
             max_tokens=max_tokens
         )
-        
+
         self.url = url
         self.version = version
-
