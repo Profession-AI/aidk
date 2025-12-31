@@ -1,7 +1,7 @@
 import pytest
 import tempfile
 import os
-from monoai.rag.documents_builder import DocumentsBuilder
+from aidk.rag.documents_builder import DocumentsBuilder
 
 
 def test_custom_split_function():

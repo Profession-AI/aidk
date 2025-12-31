@@ -1,6 +1,6 @@
 base_model:
   provider: openai
-  model: gpt-5-mini
+  model: gpt-4.1-nano
 prompts_path: prompts
 supported_files: 
   text: ["txt", "py", "md"]

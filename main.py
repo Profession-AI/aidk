@@ -1,6 +1,5 @@
-from monoai.models import Model
-from monoai.application import Application
+from aidk.models import Model
+from aidk.application import Application
 
 model = Model()
 app = Application("app", model=model)
-    

@@ -1,6 +1,6 @@
-from monoai._agents import MultiAgent
-from monoai.prompts.prompt_chain import PromptChain
-from monoai.tools import WebSearch
+from aidk._agents import MultiAgent
+from aidk.prompts.prompt_chain import PromptChain
+from aidk.tools import WebSearch
 
 
 multi_agent = MultiAgent(

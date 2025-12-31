@@ -1,22 +1,22 @@
-# MonoAI
+# AIDK
 
 <img src="static/logo.png" alt="alt text" width="400"/>
 
 ### The complete framework to build AI-powered applications
 
 
-**MonoAI** is the Python framework that enables structured, standardized, and efficient interactions with multiple AI models to develop production-ready AI Applications and AI Agents.
+**AIDK** is the Python framework that enables structured, standardized, and efficient interactions with multiple AI models to develop production-ready AI Applications and AI Agents.
 
 ---
 
 ## Installation
-You can install MonoAI via PyPi.
+You can install AIDK via PyPi.
 ```
-pip install monoai
+pip install aidk
 ```
 
 ### 🔑 API Key Management
-MonoAI simplifies API key management through a `providers.keys` file in the root directory.  
+AIDK simplifies API key management through a `providers.keys` file in the root directory.  
 Each line should follow this format:
 ```
 PROVIDER_NAME=API_KEY
@@ -28,10 +28,12 @@ OPENAI=sk-proj-ABCDE12345
 DEEPSEEK=sk-proj-FGHIJ67890
 ```
 
-MonoAI automatically loads these keys at runtime — no extra setup needed.
+**Important:** do *not* commit your `providers.keys` file to version control — the project ignores `*.keys` and `providers.keys` is explicitly ignored via `.gitignore`. Use `providers.keys.example` as a template and keep the real `providers.keys` out of the repository.
+
+AIDK automatically loads these keys at runtime — no extra setup needed.
 
 #### Keys on Google Colab
-If you are working on Google Colab, just put your API KEYS in "Secrets", MonoAI will load them automatically.
+If you are working on Google Colab, just put your API KEYS in "Secrets", AIDK will load them automatically.
 
 ---
 
@@ -39,7 +41,7 @@ If you are working on Google Colab, just put your API KEYS in "Secrets", MonoAI 
 
 ### 1. Use a Model
 ```python
-from monoai.models import Model
+from aidk.models import Model
 
 model = Model(provider="openai", model="gpt-4o-mini")
 response = model.ask("What is 2 + 2?")
@@ -58,8 +60,8 @@ What is 2 + 2?
 ```
 
 ```python
-from monoai.models import Model
-from monoai.prompts import Prompt
+from aidk.models import Model
+from aidk.prompts import Prompt
 
 model = Model(provider="openai", model="gpt-4o-mini")
 prompt = Prompt(prompt_id="sum")
@@ -71,8 +73,8 @@ print(response["response"])  # 4
 ### 3. Create a Chat
 
 ```python
-from monoai.models import Model    
-from monoai.chat import Chat
+from aidk.models import Model    
+from aidk.chat import Chat
 
 model = Model(provider="openai", model="gpt-4o-mini")
 chat = Chat(model=model, history="json")
@@ -86,10 +88,10 @@ print(response["response"])  # "You are Giuseppe"
 ### 4. Create an Agent
 
 ```python
-from monoai.models import Model   
-from monoai.agents import Agent
-from monoai.tools.websearch import search_web_with_duckduckgo
-from monoai.tools.domain_whois import domain_whois 
+from aidk.models import Model   
+from aidk.agents import Agent
+from aidk.tools.websearch import search_web_with_duckduckgo
+from aidk.tools.domain_whois import domain_whois 
 
 model = Model(provider="openai", model="gpt-4o-mini")
 agent = Agent(model=model, paradigm="react", tools=[search_web_with_duckduckgo, domain_whois])
@@ -100,25 +102,25 @@ print(response["response"])  # Agent's response with domain information
 ### 5. Create an Application
 
 ```python
-from monoai.models import Model   
-from monoai.agents import Agent
-from monoai.application import Application, RateLimiter
-from monoai.tools.websearch import search_web_with_duckduckgo
+from aidk.models import Model   
+from aidk.agents import Agent
+from aidk.application import Application, RateLimiter
+from aidk.tools.websearch import search_web_with_duckduckgo
 
 model = Model(provider="openai", model="gpt-4o-mini")
 agent = Agent(
-    model=model,
-    name="search_agent",
-    agent_prompt="You are a helpful assistant who searches for information on the web",
-    tools=[search_web_with_duckduckgo]
+  model=model,
+  name="search_agent",
+  agent_prompt="You are a helpful assistant who searches for information on the web",
+  tools=[search_web_with_duckduckgo]
 )
 
 rate_limiter = RateLimiter(requests_per_minute=20)
 application = Application(
-    name="search_ai", 
-    model=model, 
-    agents=[agent], 
-    rate_limiter=rate_limiter
+  name="search_ai", 
+  model=model, 
+  agents=[agent], 
+  rate_limiter=rate_limiter
 )
 application.serve(port=8000)
 ```
@@ -133,7 +135,7 @@ curl -X POST "http://localhost:8000/agent/search_agent" \
 
 ## 📗 Conceptual Guide
 
-MonoAI is based on composable modules that enable the development of sophisticated and scalable AI architectures.
+AIDK is based on composable modules that enable the development of sophisticated and scalable AI architectures.
 
 ```mermaid
 graph TD
@@ -171,28 +173,28 @@ graph TD
 ```
 
 ### 1. Prompt
-The foundation of all AI interactions in MonoAI. Prompts serve as the communication bridge between your application and the AI model, carrying not just the question or instruction, but also metadata about how the response should be structured and processed.
+The foundation of all AI interactions in AIDK. Prompts serve as the communication bridge between your application and the AI model, carrying not just the question or instruction, but also metadata about how the response should be structured and processed.
 
-MonoAI treats prompts as first-class citizens, supporting everything from simple text strings to complex structured objects loaded from files. The system can automatically detect response types, validate prompt structure, and even template variables for dynamic content generation. This approach ensures consistency across your application while providing the flexibility to handle complex prompt engineering scenarios.
+AIDK treats prompts as first-class citizens, supporting everything from simple text strings to complex structured objects loaded from files. The system can automatically detect response types, validate prompt structure, and even template variables for dynamic content generation. This approach ensures consistency across your application while providing the flexibility to handle complex prompt engineering scenarios.
 
 The prompt system integrates seamlessly with the configuration hierarchy, allowing you to define reusable prompt templates that can be shared across different parts of your application. Whether you're building a simple Q&A system or a complex multi-step reasoning pipeline, the prompt layer provides the foundation for reliable AI communication.
 
 ### 2. Model
-At the heart of MonoAI lies the Model component, which abstracts away the complexity of different AI providers behind a unified interface. This architectural choice means you can switch between OpenAI's GPT models, Anthropic's Claude, Google's Gemini, or even local models without changing your application code.
+At the heart of AIDK lies the Model component, which abstracts away the complexity of different AI providers behind a unified interface. This architectural choice means you can switch between OpenAI's GPT models, Anthropic's Claude, Google's Gemini, or even local models without changing your application code.
 
 The Model component handles all the low-level details of API communication, including authentication, request formatting, response parsing, and error handling. It provides both synchronous and asynchronous interfaces, with built-in streaming support for real-time applications. The system automatically manages token usage and costs, giving you visibility into your AI spending across different providers and models.
 
-MonoAI extends beyond traditional text models to support specialized model types for different media. Voice models enable speech-to-text and text-to-speech capabilities, allowing your applications to process audio input and generate spoken responses. Image models provide computer vision capabilities, enabling your applications to analyze, describe, and generate visual content. This multimodal approach ensures that your AI applications can handle the full spectrum of human communication, from text and voice to images and beyond.
+AIDK extends beyond traditional text models to support specialized model types for different media. Voice models enable speech-to-text and text-to-speech capabilities, allowing your applications to process audio input and generate spoken responses. Image models provide computer vision capabilities, enabling your applications to analyze, describe, and generate visual content. This multimodal approach ensures that your AI applications can handle the full spectrum of human communication, from text and voice to images and beyond.
 
 ### 3. Chat
 The Chat component transforms simple model interactions into rich, context-aware conversations. It maintains the state of multi-turn dialogues, ensuring that each interaction builds upon previous exchanges. This persistence is crucial for creating applications that feel natural and intelligent to users.
 
-MonoAI's chat system supports multiple storage backends, from simple in-memory dictionaries for development to robust database solutions for production. The system can automatically summarize long conversation histories to manage token costs while preserving important context. This intelligent memory management allows for extended conversations without exponential cost growth.
+AIDK's chat system supports multiple storage backends, from simple in-memory dictionaries for development to robust database solutions for production. The system can automatically summarize long conversation histories to manage token costs while preserving important context. This intelligent memory management allows for extended conversations without exponential cost growth.
 
 The chat component also handles file attachments, enabling users to upload documents, images, or other content that becomes part of the conversation context. This multimodal capability opens up possibilities for document analysis, image understanding, and other complex AI applications that require processing multiple types of content.
 
 ### 4. Agent
-Agents represent the pinnacle of MonoAI's capabilities, combining the power of AI models with external tools and sophisticated reasoning patterns. Unlike simple chatbots, agents can perform complex tasks that require planning, tool usage, and iterative problem-solving.
+Agents represent the pinnacle of AIDK's capabilities, combining the power of AI models with external tools and sophisticated reasoning patterns. Unlike simple chatbots, agents can perform complex tasks that require planning, tool usage, and iterative problem-solving.
 
 The agent system supports multiple reasoning paradigms, each optimized for different types of tasks. The ReAct pattern enables step-by-step reasoning with action execution, while plan-and-execute agents break down complex problems into manageable steps. Programmatic agents can generate and execute code, while reflexion agents learn from their mistakes and improve over time.
 
@@ -207,7 +209,7 @@ The system supports both REST APIs for traditional web applications and WebSocke
 
 ## ⚙️ Configuration
 
-MonoAI can be configured globally using a `ai.yaml` file in your project root.
+AIDK can be configured globally using a `ai.yaml` file in your project root.
 
 Supported configuration fields:
 
@@ -240,13 +242,13 @@ observability: ["logfire"]
 
 ## 👨‍💻 Command-line Interface
 
-MonoAI includes a CLI that supports various operations, such as serving applications and automatically optimizing and localizing prompts. You can find the full list of available commands in the documentation.
+AIDK includes a CLI that supports various operations, such as serving applications and automatically optimizing and localizing prompts. You can find the full list of available commands in the documentation.
 
 
 ## 📚 Documentation
 
 Full documentation is available at:  
-👉 [MonoAI Documentation](https://profession-ai.github.io/MonoAI/monoai.html)
+👉 [AIDK Documentation](https://profession-ai.github.io/MonoAI/aidk.html)
 
 
 ## 📄 License

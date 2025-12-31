@@ -81,6 +81,8 @@ bandit.yaml
 
 # Local settings
 settings_local.py
+# Keep provider keys out of the repository
+providers.keys
 *.keys
 _.py
 **/_.py

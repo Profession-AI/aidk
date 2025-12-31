@@ -1,11 +1,9 @@
-from monoai.models import Model
-from monoai.prompts.prompt_chain import PromptChain
+from aidk.models import Model
+from aidk.prompts.prompt_chain import PromptChain
 
 model = Model(
     provider="openai",
-    model="gpt-4o-mini",
-    count_tokens=True,
-    count_cost=True)
+    model="gpt-4o-mini")
 
 chain = PromptChain([
     "What is the capital of France?",

@@ -4,3 +4,4 @@ typing-extensions
 xmltodict
 pytest
 typer
+pyyaml
