@@ -1,6 +1,8 @@
 from aidk.models import Model
 from aidk.prompts import Prompt, PromptChain
-from aidk.models._response_processor import ModelResponse, ModelUsage, Model as ModelInfo
+from aidk.models._response_processor import ModelResponse, ModelUsage, Model as ModelInfo, ModelStreamHead, ModelStreamChunk, ModelStreamTail
+import pytest
+import asyncio
 
 TEST_PROMPT = "This is a test"
 TEST_PROMPT_FOLDER = "aidk/tests/prompts"
@@ -91,3 +93,35 @@ def test_model_with_prompt_type():
     assert isinstance(response.model, ModelInfo)
     assert isinstance(response.response, int)
     assert response.response == 4
+
+
+def test_model_stream():
+    """Ensure stream yields head, chunks, and a tail with usage."""
+    async def _run():
+        model = Model(provider="openai", model=TEST_MODEL)
+        first = True
+        async for chunk in model.ask_stream("This is a streaming test"):
+            if first:
+                assert isinstance(chunk, ModelStreamHead)
+                first = False
+            else:
+                assert isinstance(chunk, (ModelStreamChunk, ModelStreamTail))
+        tail = chunk
+        assert isinstance(tail, ModelStreamTail)
+        assert isinstance(tail.response, str)
+        assert isinstance(tail.usage, ModelUsage)
+
+    asyncio.run(_run())
+
+
+def test_model_async():
+    """Call the model's async implementation and assert a ModelResponse."""
+    async def _run():
+        model = Model(provider="openai", model=TEST_MODEL)
+        resp = await model._ask_async("This is an async test")
+        assert isinstance(resp, ModelResponse)
+        assert hasattr(resp, "response")
+        assert isinstance(resp.model, ModelInfo)
+        assert isinstance(resp.usage, ModelUsage)
+
+    asyncio.run(_run())
