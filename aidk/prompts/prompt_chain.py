@@ -40,7 +40,7 @@ class PromptChain(Prompt):
     """
 
     def __init__(self, 
-                 promptchain_id: str | list[Prompt] = None,
+                 promptchain_id: str = None,
                  prompts_data: list[dict] = None,
                  prompts: List[Prompt] = None,
                  response_type: type | None = None):
@@ -62,10 +62,7 @@ class PromptChain(Prompt):
         - ValueError
             If neither promptchain_id nor prompts is provided
         """
-        # Backwards compat: allow passing a list of prompts as the first positional arg
-        if isinstance(promptchain_id, list):
-            self._prompts = promptchain_id
-        elif promptchain_id is not None:
+        if promptchain_id is not None:
             self._prompts, self._response_type = _PromptChainParser().parse(promptchain_id)
             for i in range(len(self._prompts)):
                 self._prompts[i] = Prompt(prompt=self._prompts[i], prompt_data=prompts_data[i])
@@ -95,10 +92,12 @@ class PromptChain(Prompt):
         str
             The formatted prompt text with optional context
         """
+        current_prompt = self._prompts[index]
         if context is None:
-            return Prompt(prompt=self._prompts[index])
+            return Prompt(prompt=current_prompt) if isinstance(current_prompt, str) else current_prompt
         else:
-            return Prompt(prompt=str(self._prompts[index]) + "\n\n" + context)
+            return Prompt(prompt=str(current_prompt)+"\nContext: "+str(context), 
+                          response_type=None if isinstance(current_prompt, str) else current_prompt.response_type)
 
     def __str__(self) -> str:
         """
@@ -127,10 +126,4 @@ class _PromptChainParser(_PromptParser):
     def _parse(self, prompt_dict):
         prompt_dict = prompt_dict["promptchain"]
         return prompt_dict["prompt"], prompt_dict.get("@response_type")
-        
-
-if __name__ == "__main__":
-    parser = _PromptChainParser()
-    print(parser.parse("test_chain"))
-
     
