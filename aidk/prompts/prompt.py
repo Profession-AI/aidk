@@ -200,9 +200,10 @@ class _PromptParser:
             prompt_path = join(Conf()["prompts_path"], prompt_id+".prompt")
         prompt_file = open(prompt_path)
         prompt_text = prompt_file.read()        
+        prompt_text = prompt_text.strip()
         if self._very_dumb_xml_check(prompt_text):
             prompt_dict = xmltodict.parse(prompt_text)
-            return self._parse(prompt_dict), None
+            return self._parse(prompt_dict)
         else:
             return prompt_text, None
 
@@ -213,7 +214,7 @@ class _PromptParser:
         if isinstance(prompt_dict["prompt"], dict):
             prompt_dict = prompt_dict["prompt"]
             return prompt_dict["#text"], self._type_from_str(prompt_dict["@response_type"])
-        return prompt_dict["prompt"]
+        return prompt_dict["prompt"], None
     
     """
     def _parse(self, text: str):

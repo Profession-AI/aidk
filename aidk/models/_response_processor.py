@@ -2,6 +2,7 @@ from typing import Dict
 from ..prompts.prompt import Prompt
 from dataclasses import dataclass
 from decimal import Decimal
+import json
 
 @dataclass
 class Model:
@@ -64,9 +65,13 @@ class ResponseProcessorMixin:
             Dictionary containing the response and optional stats
         """
 
+        response_content = response.choices[0].message.content
+        if '"response":' in response_content:
+            response_content = json.loads(response_content)["response"]
+
         return ModelResponse(
             prompt=str(prompt),
-            response=response.choices[0].message.content,
+            response=response_content,
             model=Model(provider=self.provider, name=self.model),
             usage=ModelUsage(
                 completion_tokens=response.usage.completion_tokens,

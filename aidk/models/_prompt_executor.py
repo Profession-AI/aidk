@@ -7,7 +7,9 @@ from ..tools._tool_parser import ToolParser
 from ..mcp._mcp_tool_parser import McpToolParser
 from mcp.types import Tool as MCPTool
 from ..conf import Conf
-import litellm
+from litellm import completion, acompletion
+from litellm import success_callback, failure_callback
+import json
 
 class PromptExecutorMixin:
     """Mixin class to handle prompt execution."""
@@ -15,8 +17,8 @@ class PromptExecutorMixin:
     def _setup_observability(self):
         observability = Conf()["observability"]
         if (len(observability) > 0):
-            litellm.success_callback = observability 
-            litellm.failure_callback = observability 
+            success_callback = observability 
+            failure_callback = observability 
 
 
     async def _execute_stream(self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = None) -> AsyncGenerator[Dict, None]:
@@ -160,7 +162,7 @@ class PromptExecutorMixin:
         """
         response = None
         for i in range(chain._size):
-            current_prompt = chain._format(i, response["choices"][0]["message"]["content"] if response else None)
+            current_prompt = chain._format(i, json.loads(response["choices"][0]["message"]["content"])["response"] if response else None)
             response = self._completion(current_prompt, metadata=metadata)
         return response
     
@@ -234,16 +236,13 @@ class PromptExecutorMixin:
                     tools.append(mcp_tp.parse(tool))
         return tools
 
-    def _completion(self, prompt: Prompt|list, response_type: str = None, metadata: Dict = {}) -> Dict:
+    def _completion(self, prompt: Prompt|list, metadata: Dict = {}) -> Dict:
 
         self._setup_observability()
         from pydantic import BaseModel
 
         class Response(BaseModel):
-            response: response_type
-
-        if response_type!=None:
-            response_type = Response
+            response: prompt.response_type if prompt.response_type is not None else str
 
         self._disable_logging()
 
@@ -267,18 +266,18 @@ class PromptExecutorMixin:
         else:
             web_search_config = None
         """
-        
-        from litellm import completion
-        return completion(model=model, 
+        print(messages)
+        response = completion(model=model, 
                           messages=messages, 
-                          response_format=response_type,
+                          response_format=Response,
                           base_url = url,
                           tools=tools,
                           max_tokens=self._max_tokens,
                           metadata=metadata,
                           #web_search_options=web_search_config
                           )
-                          
+        print("Completion response:", response)
+        return response
 
     async def _completion_stream(self, prompt: str|list, response_type: str = None, metadata: Dict = None) -> AsyncGenerator[Dict, None]:
         """
