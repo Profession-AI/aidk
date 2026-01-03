@@ -1,10 +1,15 @@
+"""Model class for interacting with AI language models."""
+
+from typing import Dict, Union, AsyncGenerator
+
+from aidk.conf import Conf
+
 from ._base_model import BaseModel
 from ..keys.keys_manager import load_key
 from ._response_processor import ResponseProcessorMixin
 from ._prompt_executor import PromptExecutorMixin
 from typing import Dict, Union, AsyncGenerator
 from ..prompts.prompt import Prompt
-from aidk.conf import Conf
 
 class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
     """
@@ -37,12 +42,9 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
     """
 
     def __init__(
-        self, 
-        provider: str | None = None, 
+        self,
+        provider: str | None = None,
         model: str | None = None,
-        system_prompt: str | None = None,
-        count_tokens: bool = False,
-        count_cost: bool = False,
         max_tokens: int = None
     ):
         """
@@ -57,10 +59,8 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
         max_tokens : int, optional
             Maximum number of tokens for each request
         """
-        # Maintain backward compatibility: pass token/cost flags to BaseModel
-        super().__init__(count_tokens=count_tokens, count_cost=count_cost, max_tokens=max_tokens)
-        self.system_prompt = system_prompt
-        
+        super().__init__(max_tokens=max_tokens)
+
         if provider is None:
             provider = Conf()["base_model"]["provider"]
         if model is None:
@@ -94,6 +94,8 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
             - cost: Cost calculation (if enabled)
 
         """
+        if metadata is None:
+            metadata = {}
         response = await self._execute_async(prompt, metadata)
         return self._process_response(
             prompt,
@@ -117,6 +119,8 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
         Dict
             Streaming response chunks
         """
+        if metadata is None:
+            metadata = {}
         response = ""
         yield self._process_stream_head()
         async for chunk in self._execute_stream(prompt, metadata):
@@ -149,6 +153,8 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
             - model: Dictionary with provider and model name
             - usage: Token counts and cost
         """
+        if metadata is None:
+            metadata = {}
         if isinstance(prompt, str):
             prompt = Prompt(prompt=prompt)
         response = self._execute(prompt, metadata)

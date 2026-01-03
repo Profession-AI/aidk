@@ -1,6 +1,11 @@
+"""Auto model for automatic model selection."""
+
+
 class AutoModel:
-    def __init__(self,):
-        pass
+    """Auto model class for automatic model selection."""
+
+    def __init__(self):
+        """Initialize AutoModel."""
 
     def ask(self, prompt: str) -> str:
-        pass
+        """Ask the model with a prompt."""

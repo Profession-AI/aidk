@@ -1,5 +1,16 @@
-from typing import Dict, Union, AsyncGenerator
+"""Prompt executor mixin for handling prompt execution."""
+
+import logging
 import types
+from typing import Dict, Union, AsyncGenerator
+
+import litellm
+from litellm import acompletion, completion
+from mcp.types import Tool as MCPTool
+from pydantic import BaseModel
+
+from ..conf import Conf
+from ..mcp._mcp_tool_parser import McpToolParser
 from ..prompts.prompt import Prompt
 from ..tools._tool_parser import ToolParser
 from ..mcp._mcp_tool_parser import McpToolParser
@@ -102,7 +113,7 @@ class PromptExecutorMixin:
             mcp_tp = McpToolParser()
             for tool in self._tools:
                 if isinstance(tool, types.FunctionType):
-                    tools.append(tp.parse(tool))      
+                    tools.append(tp.parse(tool))
                 elif isinstance(tool, MCPTool):
                     tools.append(mcp_tp.parse(tool))
         return tools
@@ -154,7 +165,7 @@ class PromptExecutorMixin:
             web_search_config = None
         """
 
-        response = completion(
+        return completion(
             model=model,
             messages=messages,
             response_format=response_format,
@@ -164,10 +175,11 @@ class PromptExecutorMixin:
             metadata=metadata,
             #web_search_options=web_search_config
         )
+    
 
-        return response
-
-    async def _completion_stream(self, prompt: str|list, response_type: str = None, metadata: Dict = None) -> AsyncGenerator[Dict, None]:
+    async def _completion_stream(
+        self, prompt: str | list, response_type: str = None, metadata: Dict = None
+    ) -> AsyncGenerator[Dict, None]:
         """
         Execute a streaming completion.
         
@@ -181,24 +193,23 @@ class PromptExecutorMixin:
         """
         self._setup_observability()
         url = None
-        model = self.provider+"/"+self.model
-        if hasattr(self, "url") and self.url != None:
-            url = self.url+"/v"+str(self.version)
-            model = "hosted_vllm/"+model
-        
+        model = self.provider + "/" + self.model
+        if hasattr(self, "url") and self.url is not None:
+            url = self.url + "/v" + str(self.version)
+            model = "hosted_vllm/" + model
+
         tools = self._get_tools()
 
         if isinstance(prompt, str):
-            messages = [{ "content": prompt,"role": "user"}]
+            messages = [{"content": prompt, "role": "user"}]
         else:
             messages = prompt
 
         self._disable_logging()
-        from litellm import acompletion
 
         response = await acompletion(
-            model=model, 
-            messages=messages, 
+            model=model,
+            messages=messages,
             response_format=response_type,
             base_url=url,
             stream=True,
@@ -206,7 +217,7 @@ class PromptExecutorMixin:
             metadata=metadata,
             tools=tools
         )
-        
+
         async for chunk in response:
             yield chunk
 
@@ -223,48 +234,49 @@ class PromptExecutorMixin:
             Dictionary containing the response
         """
         self._setup_observability()
-        from pydantic import BaseModel
 
         class Response(BaseModel):
+            """Response model wrapper."""
+
             response: response_type
 
-        if response_type!=None:
+        if response_type is not None:
             response_type = Response
 
         self._disable_logging()
 
         url = None
-        model = self.provider+"/"+self.model
-        
-        if hasattr(self, "url") and self.url != None:
-            url = self.url+"/v"+str(self.version)
-            model = "hosted_vllm/"+model
-        
+        model = self.provider + "/" + self.model
+
+        if hasattr(self, "url") and self.url is not None:
+            url = self.url + "/v" + str(self.version)
+            model = "hosted_vllm/" + model
+
         tools = None
 
         if hasattr(self, "_tools"):
             tools = []
             tp = ToolParser()
             for tool in self._tools:
-                tools.append(tp.parse(tool))      
+                tools.append(tp.parse(tool))
 
         if isinstance(prompt, str):
-            messages = [{ "content": prompt,"role": "user"}]
+            messages = [{"content": prompt, "role": "user"}]
         else:
             messages = prompt
 
-        from litellm import acompletion
-        return await acompletion(model=model, 
-                                messages=messages, 
-                                response_format=response_type,
-                                base_url = url,
-                                tools=tools,
-                                max_tokens=self._max_tokens,
-                                metadata=metadata)
-            
+        return await acompletion(
+            model=model,
+            messages=messages,
+            response_format=response_type,
+            base_url=url,
+            tools=tools,
+            max_tokens=self._max_tokens,
+            metadata=metadata
+        )
 
     def _disable_logging(self):
-        import logging
+        """Disable logging for specific loggers."""
         loggers = [
             "LiteLLM Proxy",
             "LiteLLM Router",
@@ -274,5 +286,4 @@ class PromptExecutorMixin:
 
         for logger_name in loggers:
             logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.CRITICAL + 1) 
-
+            logger.setLevel(logging.CRITICAL + 1)

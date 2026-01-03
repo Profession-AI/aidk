@@ -630,7 +630,7 @@ class Chat():
             
             # Prepare messages
             messages = self._prepare_messages(processed_prompt)
-            print(messages)
+
             # Make API call
             model_response = self._model.ask(messages, metadata=metadata)
             
