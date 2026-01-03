@@ -5,6 +5,7 @@ import sqlite3
 from aidk.models import Model
 import datetime
 from dataclasses import dataclass, asdict
+from typing import Optional
 
 
 @dataclass
@@ -39,11 +40,23 @@ class Message:
 class BaseHistory:
 
     def __init__(self, 
-                 path: str, 
-                 last_n: int=None): 
-        self._history_path = path
+                 last_n: int=None,
+                 summarizer_provider: Optional[str] = None, 
+                 summarizer_model: Optional[str] = None,
+                 summarizer_max_tokens: Optional[int] = None,
+        ): 
         self._last_n = last_n
-        
+
+        if summarizer_provider and summarizer_model:
+            self._summarizer = HistorySummarizer(
+                model=Model(
+                    provider=summarizer_provider,
+                    model=summarizer_model
+                ),
+                max_tokens=summarizer_max_tokens)
+        else:
+            self._summarizer = None
+
     def generate_chat_id(self):
         return str(uuid.uuid4())
 
@@ -63,17 +76,109 @@ class BaseHistory:
                 raise ValueError(f"Invalid message type: {type(msg)}")
         return processed_messages
 
+    def summary(self):
+        pass
+
     def clear(self):
         pass
 
 
+class DictHistory(BaseHistory):
+    """
+    In-memory history storage using Python dictionaries.
+    Useful for testing and temporary conversations.
+    """
+    
+    def __init__(self, 
+                 last_n: int = None,
+                 summarizer_provider: Optional[str] = None,
+                 summarizer_model: Optional[str] = None,
+                 summarizer_max_tokens: Optional[int] = None):
+        # Call parent __init__ to set up summarizer and last_n
+        super().__init__(
+            last_n=last_n,
+            summarizer_provider=summarizer_provider,
+            summarizer_model=summarizer_model,
+            summarizer_max_tokens=summarizer_max_tokens
+        )
+        
+        # Initialize DictHistory-specific attributes
+        self._histories = {}  # Dictionary to store chat histories
+        self._summaries = {}  # Dictionary to store chat summaries
+    
+    def load(self, chat_id: str):
+        if chat_id not in self._histories:
+            self.messages = []
+            return self.messages
+        
+        messages = self._histories[chat_id]
+        if self._last_n is not None and len(messages) > (self._last_n + 1) * 2:
+            messages = [messages[0]] + messages[-self._last_n * 2:]
+        
+        # Ensure all messages are Message dataclasses
+        self.messages = [Message.from_dict(msg) if isinstance(msg, dict) else msg for msg in messages]
+        return self.messages
+        
+    def new(self, system_prompt: SystemPrompt):
+        chat_id = self.generate_chat_id()
+        
+        # Create Message dataclass for system prompt
+        system_message = Message(
+            content=system_prompt.content,
+            role=system_prompt.role,
+            provider=system_prompt.provider,
+            model=system_prompt.model
+        )
+        self.store(chat_id, [system_message])
+        return chat_id
+    
+    def store(self, chat_id: str, messages: list):
+        messages = super().store(chat_id, messages)
+        
+        if chat_id not in self._histories:
+            self._histories[chat_id] = []
+        
+        # Add the new messages (Message dataclasses)
+        self._histories[chat_id].extend(messages)
+        if self._summarizer is not None:
+            # Update summary
+            current_summary = self._summaries.get(chat_id, "")
+            new_summary = self._summarizer.summarize(current_summary, messages)
+            self._summaries[chat_id] = new_summary
+
+    def get_summary(self, chat_id: str):
+        message = self.load(chat_id)[0]
+        return [Message(content=message.content+"\n\nPer rispondere usa questo riassunto della conversazione fino ad ora:\n"+self._summaries.get(chat_id, ""), role="system")]
+    
+    def clear(self, chat_id: str):
+        """Clear history for a specific chat."""
+        if chat_id in self._histories:
+            del self._histories[chat_id]
+    
+    def clear_all(self):
+        """Clear all chat histories."""
+        self._histories.clear()
+    
+    def get_all_chat_ids(self):
+        """Get all chat IDs currently stored."""
+        return list(self._histories.keys())
+    
+    def get_chat_count(self):
+        """Get the total number of chats stored."""
+        return len(self._histories)
+
+
+
 class JSONHistory(BaseHistory):
+
+    _DEFAULT_HISTORY_PATH = "histories/"
     
     def __init__(self, 
                  path, 
                  last_n: int=None): 
-        self._history_path = path
+        self._history_path = path if path is not None else self._DEFAULT_HISTORY_PATH
         self._last_n = last_n
+
         if not os.path.exists(self._history_path):
             os.makedirs(self._history_path)
 
@@ -129,8 +234,10 @@ class JSONHistory(BaseHistory):
 
 class SQLiteHistory(BaseHistory):
     
-    def __init__(self, path: str="histories/chat.db", last_n: int=None):
-        self._db_path = path
+    _DEFAULT_DB_PATH = "histories/history.db"
+
+    def __init__(self, path: str=None, last_n: int=None):
+        self._db_path = path if path is not None else self._DEFAULT_DB_PATH
         self._last_n = last_n
         self._init_db()
     
@@ -221,68 +328,6 @@ class SQLiteHistory(BaseHistory):
                 )
                 conn.commit()
         
-
-class DictHistory(BaseHistory):
-    """
-    In-memory history storage using Python dictionaries.
-    Useful for testing and temporary conversations.
-    """
-    
-    def __init__(self, last_n: int = None):
-        self._last_n = last_n
-        self._histories = {}  # Dictionary to store chat histories
-    
-    def load(self, chat_id: str):
-        if chat_id not in self._histories:
-            self.messages = []
-            return self.messages
-        
-        messages = self._histories[chat_id]
-        if self._last_n is not None and len(messages) > (self._last_n + 1) * 2:
-            messages = [messages[0]] + messages[-self._last_n * 2:]
-        
-        # Ensure all messages are Message dataclasses
-        self.messages = [Message.from_dict(msg) if isinstance(msg, dict) else msg for msg in messages]
-        return self.messages
-    
-    def new(self, system_prompt: SystemPrompt):
-        chat_id = self.generate_chat_id()
-        
-        # Create Message dataclass for system prompt
-        system_message = Message(
-            content=system_prompt.content,
-            role=system_prompt.role,
-            provider=system_prompt.provider,
-            model=system_prompt.model
-        )
-        self.store(chat_id, [system_message])
-        return chat_id
-    
-    def store(self, chat_id: str, messages: list):
-        messages = super().store(chat_id, messages)
-        
-        if chat_id not in self._histories:
-            self._histories[chat_id] = []
-        
-        # Add the new messages (Message dataclasses)
-        self._histories[chat_id].extend(messages)
-    
-    def clear(self, chat_id: str):
-        """Clear history for a specific chat."""
-        if chat_id in self._histories:
-            del self._histories[chat_id]
-    
-    def clear_all(self):
-        """Clear all chat histories."""
-        self._histories.clear()
-    
-    def get_all_chat_ids(self):
-        """Get all chat IDs currently stored."""
-        return list(self._histories.keys())
-    
-    def get_chat_count(self):
-        """Get the total number of chats stored."""
-        return len(self._histories)
 
 
 class MongoDBHistory(BaseHistory):
@@ -675,8 +720,8 @@ class HistorySummarizer():
         self._model = model
         self._max_tokens = max_tokens
 
-    def summarize(self, messages: list):
-        response = self._model.ask("Summarize the following conversation: "+json.dumps(messages))
-        response = response["response"]
+    def summarize(self, current_summary: str, last_messages: list):
+        response = self._model.ask("Summarize the following conversation: "+current_summary+"\n".join([msg.content for msg in last_messages]))
+        response = response.response
         return response
 

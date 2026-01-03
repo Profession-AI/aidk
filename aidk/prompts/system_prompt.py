@@ -1,5 +1,4 @@
 from .prompt import Prompt
-from typing import Any
 
 class SystemPrompt(Prompt):
     """

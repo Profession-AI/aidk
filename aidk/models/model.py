@@ -2,10 +2,7 @@ from ._base_model import BaseModel
 from ..keys.keys_manager import load_key
 from ._response_processor import ResponseProcessorMixin
 from ._prompt_executor import PromptExecutorMixin
-from typing import Sequence, Dict, Union, AsyncGenerator
-from ..tokens.token_counter import TokenCounter
-from ..tokens.token_cost import TokenCost
-from ..prompts.prompt_chain import PromptChain
+from typing import Dict, Union, AsyncGenerator
 from ..prompts.prompt import Prompt
 from aidk.conf import Conf
 
@@ -75,7 +72,7 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
         self.model = model
         self._web_search = False
 
-    async def _ask_async(self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = {}) -> Dict:
+    async def ask_async(self, prompt: Union[str, Prompt], metadata: Dict = {}) -> Dict:
         """
         Ask the model asynchronously.
 
@@ -104,13 +101,13 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
         )
 
     
-    async def ask_stream(self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = {}) -> AsyncGenerator[Dict, None]:
+    async def ask_stream(self, prompt: Union[str, Prompt], metadata: Dict = {}) -> AsyncGenerator[Dict, None]:
         """
         Ask the model with streaming response.
 
         Parameters
         ----------
-        prompt : Union[str, Prompt, PromptChain]
+        prompt : Union[str, Prompt]
             The prompt to process
         metadata : Dict, optional
             Metadata to pass to the completion call
@@ -133,7 +130,7 @@ class Model(BaseModel, ResponseProcessorMixin, PromptExecutorMixin):
 
 
 
-    def ask(self, prompt: Union[str, Prompt, PromptChain], metadata: Dict = {}) -> Dict:
+    def ask(self, prompt: Union[str, Prompt], metadata: Dict = {}) -> Dict:
         """
         Ask the model.
 

@@ -1,6 +1,6 @@
-from litellm import acompletion
 from aidk.chat.history import *
 from aidk.models import Model
+from aidk.models import ModelResponse, ModelStreamHead, ModelStreamChunk, ModelStreamTail
 from aidk.conf.conf import Conf
 from aidk.prompts.prompt import Prompt
 import os
@@ -14,22 +14,30 @@ from dataclasses import dataclass
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class ModelInfo:
     """Information about the model used."""
     provider: str
     name: str
 
-
-@dataclass
-class ChatResponse:
+@dataclass(kw_only=True)
+class ChatResponse(ModelResponse):
     """Response from a chat request."""
     chat_id: str
-    response: str
-    model: ModelInfo
     history: Optional[List[Message]] = None
 
+@dataclass(kw_only=True)
+class ChatStreamHead(ModelStreamHead):
+    """Head of a streaming chat response."""
+    chat_id: str
+
+@dataclass(kw_only=True)
+class ChatStreamChunk(ModelStreamChunk):
+    pass
+
+@dataclass(kw_only=True)
+class ChatStreamTail(ModelStreamTail):
+    pass
 
 @dataclass
 class ChatInfo:
@@ -38,8 +46,6 @@ class ChatInfo:
     provider: str
     model: str
     max_tokens: Optional[int]
-    has_history_summarizer: bool
-
 
 class ChatError(Exception):
     """Custom exception for Chat-related errors."""
@@ -57,8 +63,8 @@ class Chat():
     from aidk.chat import Chat
     model = Model(provider="openai", model="gpt-4o-mini")
     chat = Chat(model=model)
-    response = chat.ask("2+2") # {"chat_id": "...", "response": "4", "model": {...}}
-    response = chat.ask("+2") # {"chat_id": "...", "response": "6", "model": {...}}
+    response = chat.send("2+2") # {"chat_id": "...", "response": "4", "model": {...}}
+    response = chat.send("+2") # {"chat_id": "...", "response": "6", "model": {...}}
     ```    
 
     With history:
@@ -70,16 +76,15 @@ class Chat():
     # Create a new chat with JSON history
     chat = Chat(model=model, history="json")
     print(chat.chat_id) # 8cc2bfa3-e9a0-4b82-b46e-3376cd220dd3
-    response = chat.ask("Hello! I'm Giuseppe") # {"chat_id": "...", "response": "Hello!", "model": {...}}
+    response = chat.send("Hello! I'm Giuseppe") # {"chat_id": "...", "response": "Hello!", "model": {...}}
 
     # Load a chat with JSON history
     chat = Chat(model=model, history="json", chat_id="8cc2bfa3-e9a0-4b82-b46e-3376cd220dd3")
-    response = chat.ask("What's my name?") # {"chat_id": "...", "response": "Your name is Giuseppe", "model": {...}}
-
+    response = chat.send("What's my name?") # {"chat_id": "...", "response": "Your name is Giuseppe", "model": {...}}
     # Create a new chat with in-memory dictionary history
     chat = Chat(model=model, history="dict")
     print(chat.chat_id) # 8cc2bfa3-e9a0-4b82-b46e-3376cd220dd3
-    response = chat.ask("Hello! I'm Giuseppe") # {"chat_id": "...", "response": "Hello!", "model": {...}}
+    response = chat.send("Hello! I'm Giuseppe") # {"chat_id": "...", "response": "Hello!", "model": {...}}
     ```
 
     With history summarizer:
@@ -95,9 +100,9 @@ class Chat():
         history_summarizer_model="gpt-4o-mini", 
         history_summarizer_max_tokens=100
     )
-                
-    response = chat.ask("Hello! I'm Giuseppe") # {"chat_id": "...", "response": "Hello!", "model": {...}}
-    response = chat.ask("What's my name?") # {"chat_id": "...", "response": "Your name is Giuseppe", "model": {...}}
+
+    response = chat.send("Hello! I'm Giuseppe") # {"chat_id": "...", "response": "Hello!", "model": {...}}
+    response = chat.send("What's my name?") # {"chat_id": "...", "response": "Your name is Giuseppe", "model": {...}}
     ```
 
     With metadata for observability:
@@ -109,7 +114,7 @@ class Chat():
     chat = Chat(model=model)
     
     # Pass metadata for tracking
-    response = chat.ask(
+    response = chat.send(
         "Hello! I'm Giuseppe", 
         metadata={
             "user_id": "12345",
@@ -119,7 +124,7 @@ class Chat():
     )
     
     # Streaming with metadata
-    async for chunk in chat.ask_stream(
+    async for chunk in chat.send_stream(
         "Tell me a story",
         metadata={"user_id": "12345", "request_type": "story_generation"}
     ):
@@ -140,10 +145,7 @@ class Chat():
                  max_tokens: Optional[int] = None,
                  history: Union[str, BaseHistory] = "dict", 
                  history_last_n: Optional[int] = None,
-                 history_path: Optional[str] = "histories",
-                 history_summarizer_provider: Optional[str] = None, 
-                 history_summarizer_model: Optional[str] = None,
-                 history_summarizer_max_tokens: Optional[int] = None,
+                 history_path: Optional[str] = None,
                  chat_id: Optional[str] = None) -> None:
 
         """
@@ -166,12 +168,6 @@ class Chat():
         history_path : str, optional
             The path to the history storage (not used for "dict" history type).
             Default is "histories".
-        history_summarizer_provider : str, optional
-            The provider of the history summarizer model.
-        history_summarizer_model : str, optional
-            The model name for the history summarizer.
-        history_summarizer_max_tokens : int, optional
-            The maximum number of tokens for the history summarizer.
         chat_id : str, optional
             The id of the chat to load. If not provided, a new chat will be created.
             If provided but chat doesn't exist, a new chat will be created with this ID.
@@ -186,18 +182,9 @@ class Chat():
             self._max_tokens = max_tokens
             self._model = model
             
-            self._history_summarizer = None
-
             # Initialize history
             self._initialize_history(history, history_last_n, history_path)
             
-            # Initialize history summarizer
-            self._initialize_history_summarizer(
-                history_summarizer_provider, 
-                history_summarizer_model, 
-                history_summarizer_max_tokens
-            )
-
             # Process system prompt
             processed_system_prompt = self._process_system_prompt(system_prompt)
             # Initialize chat
@@ -309,25 +296,6 @@ class Chat():
         except Exception as e:
             raise ChatError(f"Failed to initialize history: {e}")
 
-    def _initialize_history_summarizer(self, provider: Optional[str], model: Optional[str], max_tokens: Optional[int]) -> None:
-        """Initialize the history summarizer.
-        
-        Parameters
-        ----------
-        provider : Optional[str]
-            Provider for the summarizer model
-        model : Optional[str]
-            Model name for the summarizer
-        max_tokens : Optional[int]
-            Maximum tokens for summarization
-        """
-        if provider is not None and model is not None:
-            try:
-                self._history_summarizer = HistorySummarizer(
-                    Model(provider=provider, model=model, max_tokens=max_tokens)
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize history summarizer: {e}")
 
     def _process_system_prompt(self, system_prompt: Optional[Union[Prompt, str]]) -> SystemPrompt:
         """Process and load the system prompt.
@@ -556,17 +524,16 @@ class Chat():
             If message preparation fails
         """
         try:
-            messages = self._history.load(self.chat_id)
+            if self._history._summarizer is None:
+                messages = self._history.load(self.chat_id)
+            else:
+                messages = self._history.get_summary(self.chat_id)
             # Convert Message dataclasses to dictionaries for API call
             messages_dict = [{'role': msg.role, 'content': msg.content} for msg in messages]
 
             messages_dict.append({"role": "user", "content": prompt})
 
-            # Apply history summarization if enabled
-            if self._history_summarizer is not None:
-                return self._apply_history_summarization(messages_dict)
-            else:
-                return messages_dict
+            return messages_dict
                 
         except Exception as e:
             raise ChatError(f"Failed to prepare messages: {e}")
@@ -624,14 +591,14 @@ class Chat():
             logger.error(f"Failed to store messages: {e}")
 
 
-    def ask(self, prompt: str, file: Optional[Union[str, bytes]] = None, file_type: Optional[str] = None, return_history: bool = False, metadata: Optional[Dict[str, Any]] = {}) -> ChatResponse:
+    def send(self, prompt: str, file: Optional[Union[str, bytes]] = None, file_type: Optional[str] = None, return_history: bool = False, metadata: Optional[Dict[str, Any]] = {}) -> ChatResponse:
         """
-        Ask the model a question.
+        Send the model a question.
 
         Parameters
         ----------
         prompt : str
-            The question to ask the model
+            The question to send the model
         file : str | bytes, optional
             The file to attach to the message, if it's a string it will be treated as a local path or remote url to a file
         file_type : str, optional
@@ -646,8 +613,7 @@ class Chat():
         ChatResponse
             ChatResponse dataclass containing:
             - chat_id: str - The chat identifier
-            - response: str - The model response
-            - model: ModelInfo - Model provider and name
+            - response: ModelResponse - The model response
             - history: Optional[List[Message]] - Full chat history if return_history is True
 
         Raises
@@ -664,19 +630,12 @@ class Chat():
             
             # Prepare messages
             messages = self._prepare_messages(processed_prompt)
-            
+            print(messages)
             # Make API call
-            response = self._model.ask(messages, metadata=metadata)
-            response_content = response["response"]
+            model_response = self._model.ask(messages, metadata=metadata)
             
             # Store messages
-            self._store_messages(messages, response_content)
-            
-            # Create model info
-            model_info = ModelInfo(
-                provider=self._model.provider,
-                name=self._model.model
-            )
+            self._store_messages(messages, model_response.response)
             
             # Get history if requested
             history = None
@@ -685,23 +644,22 @@ class Chat():
             
             return ChatResponse(
                 chat_id=self.chat_id,
-                response=response_content,
-                model=model_info,
-                history=history
+                history=history,
+                **asdict(model_response)
             )
-                
+                        
         except Exception as e:
             logger.error(f"Ask request failed: {e}")
             raise ChatError(f"Ask request failed: {e}")
 
-    async def ask_stream(self, prompt: str, file: Optional[Union[str, bytes]] = None, file_type: Optional[str] = None, metadata: Optional[Dict[str, Any]] = {}) -> AsyncGenerator[Dict[str, Any], None]:
+    async def send_stream(self, prompt: str, file: Optional[Union[str, bytes]] = None, file_type: Optional[str] = None, metadata: Optional[Dict[str, Any]] = {}) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Ask the model a question and stream the response.
+        Send the model a question and stream the response.
 
         Parameters
         ----------
         prompt : str
-            The question to ask the model
+            The question to send the model
         file : str | bytes, optional
             The file to attach to the message
         file_type : str, optional
@@ -723,7 +681,6 @@ class Chat():
             If the request fails or parameters are invalid
         """
 
-        print(self._metadata, metadata)
         metadata = self._metadata | metadata
 
         try:
@@ -735,73 +692,57 @@ class Chat():
             
             # Make streaming API call
             response = self._model.ask_stream(messages, metadata=metadata)
-            yield {"chat_id": self.chat_id}
-            response_text = ""
-            async for chunk in response: 
-                if "delta" in chunk:
-                    response_text += chunk["delta"]
-                yield chunk
 
+            async for chunk in response:
+                if (isinstance(chunk, ModelStreamHead)):
+                    yield ChatStreamHead(chat_id=self.chat_id, **asdict(chunk)) 
+                elif (isinstance(chunk, ModelStreamChunk)):
+                    yield ChatStreamChunk(**asdict(chunk))
+                elif (isinstance(chunk, ModelStreamTail)):
+                    yield ChatStreamTail(**asdict(chunk))
+                else:
+                    yield chunk
+            
             # Store messages using Message dataclasses
-            self._store_messages(messages, response_text)
+            #self._store_messages(messages, response_text)
             
         except Exception as e:
             logger.error(f"Stream request failed: {e}")
             raise ChatError(f"Stream request failed: {e}")
 
-    async def ask_async(self, prompt: str, file: Optional[Union[str, bytes]] = None, file_type: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> AsyncGenerator[str, None]:
+    async def send_async(self, prompt: str, file: Optional[Union[str, bytes]] = None, file_type: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> "ChatResponse":
         """
-        Ask the model a question and stream the response asynchronously.
+        Send the model a question using the async (non-streaming) model API and return a ChatResponse.
 
-        Parameters
-        ----------
-        prompt : str
-            The question to ask the model
-        file : str | bytes, optional
-            The file to attach to the message
-        file_type : str, optional
-            The type of the file
-        metadata : Dict[str, Any], optional
-            Metadata to pass to the model for observability and tracking
-
-        Yields
-        ------
-        str
-            Response text chunks as strings
-
-        Raises
-        ------
-        ChatError
-            If the request fails or parameters are invalid
+        This method awaits the model's async completion and returns a `ChatResponse` wrapping
+        the underlying `ModelResponse`.
         """
 
-        metadata = self._metadata | metadata
+        # Merge metadata safely
+        metadata = self._metadata | (metadata or {})
 
         try:
             # Process file attachment
             processed_prompt = self._process_file_attachment(prompt, file, file_type)
-            
+
             # Prepare messages
             messages = self._prepare_messages(processed_prompt)
-            
-            # Make streaming API call
-            response = await acompletion(
-                model=self._model,
-                messages=messages,
-                stream=True,
-                max_tokens=self._max_tokens,
-                metadata=metadata
+
+            # Await the model's async (non-streaming) API
+            model_response = await self._model.ask_async(messages, metadata=metadata)
+
+            # Store messages (use the string payload from ModelResponse)
+            self._store_messages(messages, model_response.response)
+
+            # Get history if requested (not applicable here, but kept for parity)
+            history = self._history.load(self.chat_id) if hasattr(self._history, 'load') else None
+
+            return ChatResponse(
+                chat_id=self.chat_id,
+                history=history,
+                **asdict(model_response)
             )
 
-            response_text = ""
-            async for part in response:
-                content = part["choices"][0]["delta"]["content"] or ""
-                response_text += content
-                yield content
-                
-            # Store messages using Message dataclasses
-            self._store_messages(messages, response_text)
-            
         except Exception as e:
             logger.error(f"Async request failed: {e}")
             raise ChatError(f"Async request failed: {e}")
@@ -819,8 +760,7 @@ class Chat():
             chat_id=self.chat_id,
             provider=self._model.provider,
             model=self._model.model,
-            max_tokens=self._max_tokens,
-            has_history_summarizer=self._history_summarizer is not None
+            max_tokens=self._max_tokens
         )
 
     def clear_history(self) -> None:

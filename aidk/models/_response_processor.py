@@ -18,7 +18,7 @@ class ModelUsage:
     total_tokens: int
     cost: Decimal
 
-@dataclass
+@dataclass(kw_only=True)
 class ModelResponse:
     """Model response."""
     prompt: str

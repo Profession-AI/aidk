@@ -35,7 +35,7 @@ class BaseModel(ABC):
         pass
 
     @abstractmethod
-    async def _ask_async(self, prompt: str) -> Union[List[Dict], Dict]:
+    async def ask_async(self, prompt: str) -> Union[List[Dict], Dict]:
         """Ask the model asynchronously."""
         pass
 
