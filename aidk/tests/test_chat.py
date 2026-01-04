@@ -21,7 +21,14 @@ def cleanup_histories():
     if sqlite_history_path.exists():
         shutil.rmtree(sqlite_history_path)
 """
-        
+
+@pytest.fixture
+def dict_chat():
+    """Create a new chat with JSON history."""
+    model = Model(provider="openai", model=TEST_MODEL)
+    return Chat(model=model, system_prompt=TEST_SYSTEM_PROMPT, history="dict")
+
+
 @pytest.fixture
 def json_chat():
     """Create a new chat with JSON history."""
@@ -40,6 +47,13 @@ def test_chat_initialization():
     chat = Chat(model=model, system_prompt=TEST_SYSTEM_PROMPT)
     assert chat.chat_id is not None
     assert chat._history is not None
+
+def test_history_basic_operations(dict_chat):
+    """Test basic operations with dict history."""
+    # Test initial calculation
+    response = dict_chat.send("Io sono Giuseppe")
+    response = dict_chat.send("dici il mio nome, solo il mio nome")
+    assert response.response == "Giuseppe"
 
 def test_json_history_basic_operations(json_chat):
     """Test basic operations with JSON history."""

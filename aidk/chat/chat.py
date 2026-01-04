@@ -1,6 +1,6 @@
 from aidk.chat.history import *
-from aidk.models import Model
 from aidk.models import ModelResponse, ModelStreamHead, ModelStreamChunk, ModelStreamTail
+from aidk.prompts.system_prompt import SystemPrompt
 from aidk.conf.conf import Conf
 from aidk.prompts.prompt import Prompt
 import os
@@ -8,7 +8,7 @@ import base64
 import logging
 from typing import Union, Optional, AsyncGenerator, List, Dict, Any
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -189,7 +189,7 @@ class Chat():
             processed_system_prompt = self._process_system_prompt(system_prompt)
             # Initialize chat
             if chat_id is None:
-                self.chat_id = self._history.new(processed_system_prompt)
+                self.chat_id = self._history.new_chat(processed_system_prompt)
             else:
                 # Check if chat exists, if not create it
                 self.chat_id = self._initialize_or_create_chat(chat_id, processed_system_prompt)
@@ -217,7 +217,7 @@ class Chat():
         """
         try:
             # Try to load existing chat
-            existing_messages = self._history.load(chat_id)
+            existing_messages = self._history.get_messages(chat_id)
             
             # Check if chat exists and has messages
             if existing_messages and len(existing_messages) > 0:
@@ -249,16 +249,15 @@ class Chat():
             The chat ID
         """
         try:
-            # Create Message dataclass for system prompt
             system_message = Message(
-                content=system_prompt.content,
-                role=system_prompt.role,
-                provider=system_prompt.provider,
-                model=system_prompt.model
+                content=str(system_prompt),
+                role="system",
+                provider=self._model.provider,
+                model=self._model.model
             )
             
             # Store the system message with the specific chat_id
-            self._history.store(chat_id, [system_message])
+            self._history.store_chat(chat_id, [system_message])
             
             return chat_id
             
@@ -297,7 +296,7 @@ class Chat():
             raise ChatError(f"Failed to initialize history: {e}")
 
 
-    def _process_system_prompt(self, system_prompt: Optional[Union[Prompt, str]]) -> SystemPrompt:
+    def _process_system_prompt(self, system_prompt: Optional[Union[Prompt, str]]) -> Message:
         """Process and load the system prompt.
         
         Parameters
@@ -323,7 +322,7 @@ class Chat():
             logger.warning(f"Failed to process system prompt: {e}")
             system_prompt = ""
 
-        return SystemPrompt(content=system_prompt, provider=self._model.provider, model=self._model.model)
+        return Message(content=system_prompt, provider=self._model.provider, model=self._model.model, role="system")
 
     def _load_default_system_prompt(self) -> str:
         """Load the default system prompt from file.
@@ -525,11 +524,11 @@ class Chat():
         """
         try:
             if self._history._summarizer is None:
-                messages = self._history.load(self.chat_id)
+                messages = self._history.get_messages(self.chat_id)
+                messages_dict = [{'role': msg.role, 'content': msg.content} for msg in messages]
             else:
                 messages = self._history.get_summary(self.chat_id)
-            # Convert Message dataclasses to dictionaries for API call
-            messages_dict = [{'role': msg.role, 'content': msg.content} for msg in messages]
+                messages_dict = [{'role': messages.role, 'content': messages.content}]
 
             messages_dict.append({"role": "user", "content": prompt})
 
@@ -538,27 +537,6 @@ class Chat():
         except Exception as e:
             raise ChatError(f"Failed to prepare messages: {e}")
 
-    def _apply_history_summarization(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Apply history summarization to messages.
-        
-        Parameters
-        ----------
-        messages : List[Dict[str, Any]]
-            Full message history
-            
-        Returns
-        -------
-        List[Dict[str, Any]]
-            Summarized messages for API call
-        """
-        try:
-            summarized = self._history_summarizer.summarize(messages)
-            ask_messages = [messages[0], messages[-1]]
-            ask_messages[0]["content"] += Conf()["default_prompt"]["summary"] + summarized
-            return ask_messages
-        except Exception as e:
-            logger.warning(f"History summarization failed, using full history: {e}")
-            return messages
 
     def _store_messages(self, messages: List[Dict[str, Any]], response_content: str) -> None:
         """Store messages in history.
@@ -586,7 +564,7 @@ class Chat():
                 model=self._model.model
             )
             
-            self._history.store(self.chat_id, [user_message, assistant_message])
+            self._history.store_chat(self.chat_id, [user_message, assistant_message])
         except Exception as e:
             logger.error(f"Failed to store messages: {e}")
 
@@ -640,7 +618,7 @@ class Chat():
             # Get history if requested
             history = None
             if return_history:
-                history = self._history.load(self.chat_id)
+                history = self._history.get_messages(self.chat_id)
             
             return ChatResponse(
                 chat_id=self.chat_id,
@@ -735,7 +713,7 @@ class Chat():
             self._store_messages(messages, model_response.response)
 
             # Get history if requested (not applicable here, but kept for parity)
-            history = self._history.load(self.chat_id) if hasattr(self._history, 'load') else None
+            history = self._history.get_messages(self.chat_id) if hasattr(self._history, 'load') else None
 
             return ChatResponse(
                 chat_id=self.chat_id,
