@@ -7,13 +7,24 @@ at module import time. Classes are imported only when accessed.
 
 from .model import Model
 from .hosted_model import HostedModel
-from .multi_model import MultiModel
-from .collaborative_model import CollaborativeModel
 from .image_model import ImageModel
 from .voice_model import VoiceModel
+from ._response_processor import (
+    ModelResponse,
+    ModelUsage,
+    ModelStreamHead,
+    ModelStreamChunk,
+    ModelStreamTail,
+)
 
-__all__ = ['Model', "HostedModel", 'MultiModel', 'CollaborativeModel', 'ImageModel', 'VoiceModel']
-
-# Backwards compatibility: old name 'CollectiveModel' -> 'CollaborativeModel'
-CollectiveModel = CollaborativeModel
-__all__.append('CollectiveModel')
+__all__ = [
+    'Model',
+    'HostedModel',
+    'ImageModel',
+    'VoiceModel',
+    'ModelResponse',
+    'ModelUsage',
+    'ModelStreamHead',
+    'ModelStreamChunk',
+    'ModelStreamTail',
+]

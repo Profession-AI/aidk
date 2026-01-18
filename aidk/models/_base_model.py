@@ -32,7 +32,7 @@ class BaseModel(ABC):
         """Ask the model synchronously."""
 
     @abstractmethod
-    async def _ask_async(self, prompt: str) -> Union[List[Dict], Dict]:
+    async def ask_async(self, prompt: str) -> Union[List[Dict], Dict]:
         """Ask the model asynchronously."""
 
     def _add_rag(self, rag: 'RAG'):

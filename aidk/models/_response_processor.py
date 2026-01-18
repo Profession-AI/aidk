@@ -1,5 +1,7 @@
+"""Response processor mixin for handling model responses."""
+
 from typing import Dict
-from ..prompts.prompt import Prompt
+from aidk.prompts.prompt import Prompt
 from dataclasses import dataclass
 from decimal import Decimal
 import json
@@ -18,7 +20,7 @@ class ModelUsage:
     total_tokens: int
     cost: Decimal
 
-@dataclass
+@dataclass(kw_only=True)
 class ModelResponse:
     """Model response."""
     prompt: str
