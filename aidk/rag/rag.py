@@ -1,7 +1,5 @@
-from litellm import embedding
-from aidk.keys.keys_manager import load_key
-from aidk.rag.vectordb import ChromaVectorDB
-from typing import List, Dict, Any, Optional
+from aidk.rag.vectordb.base import BaseVectorDB, DocumentRetrieved
+from typing import List
 
 class RAG:
     """
@@ -67,77 +65,39 @@ class RAG:
 
     """
 
-    def __init__(self, 
-                database: str,
-                 provider: Optional[str] = None,
-                 vectorizer: Optional[str] = None, 
-                 vector_db: str = "chroma"):
+    def __init__(self, vector_db: BaseVectorDB):
         """
         Initialize the RAG system.
         
         Parameters:
         -----------
-        database : str
-            Name of the vector database/collection to use for storage and retrieval.
-            This will be created if it doesn't exist.
-            
-        provider : str, optional
-            The embedding provider to use (e.g., "openai", "anthropic", "cohere").
-            If provided, the corresponding API key will be loaded automatically.
-            If None, the system will use default embedding settings.
-            
-        vectorizer : str, optional
-            The specific embedding model to use for vectorization.
-            Examples: "text-embedding-ada-002", "text-embedding-3-small", "embed-english-v3.0"
-            If None, the provider's default model will be used.
-            
-        vector_db : str, default="chroma"
-            The vector database backend to use. Currently supports:
-            - "chroma": ChromaDB (default, recommended for most use cases)
-            
-        Raises:
-        -------
-        ValueError
-            If an unsupported vector database is specified.
+        vector_db : BaseVectorDB
+            An initialized vector database instance that implements the BaseVectorDB interface.
+            This should be pre-configured with the desired collection name, embedding provider,
+            and embedding model.
             
         Examples:
         ---------
         ```python
-        # Minimal initialization
-        rag = RAG("my_documents")
+        # Initialize with ChromaDB backend
+        from aidk.rag.vectordb import ChromaVectorDB
         
-        # With OpenAI embeddings
-        rag = RAG(
-            database="research_papers",
-            provider="openai",
-            vectorizer="text-embedding-ada-002"
+        vector_db = ChromaVectorDB(
+            name="my_documents",
+            vectorizer_provider="openai",
+            vectorizer_model="text-embedding-ada-002"
         )
+        rag = RAG(vector_db=vector_db)
         
-        # With Anthropic embeddings
-        rag = RAG(
-            database="articles",
-            provider="anthropic",
-            vectorizer="text-embedding-3-small"
-        )
+        # Or using a different backend
+        vector_db = SomeOtherVectorDB(...)  # Any BaseVectorDB implementation
+        rag = RAG(vector_db=vector_db)
         ```
         """
-        if provider:
-            load_key(provider)
-            
-        self._vectorizer = vectorizer
-        self._db = database
-        
-        if vector_db == "chroma":
-            self._vector_db = ChromaVectorDB(
-                name=database, 
-                vectorizer_provider=provider, 
-                vectorizer_model=vectorizer
-            )
-        else:
-            raise ValueError(f"Vector database '{vector_db}' not supported. Currently only 'chroma' is supported.")
+        self._vector_db = vector_db
         
 
-    def query(self, query: str, k: int = 10) -> Dict[str, Any]:
+    def query(self, query: str, top_k: int = 10) -> List[DocumentRetrieved]:
         """
         Perform a semantic search query against the vector database.
         
@@ -150,53 +110,41 @@ class RAG:
             The text query to search for. This will be converted to a vector
             embedding and used to find similar documents.
             
-        k : int, default=10
+        top_k : int, default=10
             The number of most relevant documents to return. Higher values
             return more results but may include less relevant documents.
             
         Returns:
         --------
-        Dict[str, Any]
-            A dictionary containing the search results with the following structure:
-            {
-                'ids': List[List[str]] - Document IDs of the retrieved documents,
-                'documents': List[List[str]] - The actual document content,
-                'metadatas': List[List[Dict]] - Metadata for each document,
-                'distances': List[List[float]] - Similarity scores (lower = more similar)
-            }
+        List[DocumentRetrieved]
+            A list of DocumentRetrieved objects, each containing:
+            - content: The document text
+            - metadata: Dictionary of document metadata
+            - doc_id: Unique document identifier
+            - distance: Similarity score (lower = more similar, 0 = identical)
             
         Examples:
         ---------
         ```python
         # Basic query
         results = rag.query("What is artificial intelligence?")
+        for doc in results:
+            print(f"ID: {doc.doc_id}")
+            print(f"Content: {doc.content}")
+            print(f"Similarity: {doc.distance}")
+            print(f"Metadata: {doc.metadata}")
         
         # Query with more results
-        results = rag.query("Machine learning algorithms", k=20)
-        
-        # Accessing results
-        for i, (doc_id, document, metadata, distance) in enumerate(zip(
-            results['ids'][0], 
-            results['documents'][0], 
-            results['metadatas'][0], 
-            results['distances'][0]
-        )):
-            print(f"Result {i+1}:")
-            print(f"  ID: {doc_id}")
-            print(f"  Content: {document[:100]}...")
-            print(f"  Similarity: {1 - distance:.3f}")
-            print(f"  Metadata: {metadata}")
-            print()
+        results = rag.query("Machine learning algorithms", top_k=20)
         ```
         
         Notes:
         ------
-        - The query is automatically converted to lowercase and processed
         - Results are returned in order of relevance (most similar first)
         - Distance scores are cosine distances (0 = identical, 2 = completely opposite)
-        - If fewer than k documents exist in the database, all available documents are returned
+        - If fewer than top_k documents exist in the database, all available documents are returned
         """
-        return self._vector_db.query(query, k)
+        return self._vector_db.query(query, top_k)
 
 
 

@@ -1,5 +1,6 @@
 import pytest
 from aidk.chat import Chat
+from aidk.chat.history import JSONHistory
 from aidk.chat.chat import ChatResponse
 from aidk.models import Model
 from aidk.models._response_processor import ModelStreamChunk, ModelStreamTail
@@ -91,13 +92,12 @@ def test_sqlite_history_persistence(sqlite_chat):
 def test_summarizer():
     """Test that the summarizer works."""
     model = Model(provider="openai", model=TEST_MODEL)
-
-    new_chat = Chat(model=model,
-                    history="json",
-                    history_summarizer_provider="openai",
-                    history_summarizer_model="gpt-4o-mini",
-                    history_summarizer_max_tokens=100)
-
+    history = JSONHistory(
+        path="histories",
+        summarizer_provider="openai",
+        summarizer_model="gpt-4.1-nano",
+        summarizer_max_tokens=200)
+    new_chat = Chat(model=model,history=history)
     new_chat.send("Mi chiamo Giuseppe")
     response = new_chat.send("Come mi chiamo? Ritorna solo il mio nome e niente altro.")
     assert response.response == "Giuseppe"
@@ -107,14 +107,13 @@ def test_history_last_n():
 
     last_n = 2
     model = Model(provider="openai", model=TEST_MODEL)
+    history = JSONHistory(path="histories", last_n=last_n)
+    json_chat = Chat(model=model, history=history)
 
-    json_chat = Chat(model=model,
-                    history="json",
-                    history_last_n=last_n)
-
-    json_chat.send("Mi chiamo Giuseppe, non nominarmi a meno che non te lo chieda")
+    json_chat.send("Io sono Giuseppe, non ripetere il mio nome a meno che non te lo chieda")
     json_chat.send("Vivo in Italia")
     json_chat.send("Sono un ingegnere")
+    json_chat.send("Ho un gatto di nome Nigma")
     response = json_chat.send("Come mi chiamo ? Ritorna il nome e niente altro.", return_history=True)
     assert len(response.history) == last_n*2+1  # last_n exchanges + system prompt
     assert response.response != "Giuseppe"
@@ -144,3 +143,137 @@ def test_send_async_basic(json_chat):
     chat_response = asyncio.run(json_chat.send_async("Come mi chiamo? Ritorna solo il mio nome e niente altro."))
 
     assert chat_response.response == "Giuseppe"
+
+def test_dict_history_summary():
+    """Test get_summary and save_summary with DictHistory."""
+    from aidk.chat.history import DictHistory
+    
+    history = DictHistory()
+    chat_id = history.generate_chat_id()
+    
+    # Initially empty summary
+    summary = history.get_summary(chat_id)
+    assert summary.content == ""
+    assert summary.role == "system"
+    
+    # Save a summary
+    test_summary = "Conversation about Giuseppe"
+    history.save_summary(chat_id, test_summary)
+    
+    # Retrieve the summary
+    summary = history.get_summary(chat_id)
+    assert summary.content == test_summary
+
+def test_json_history_summary():
+    """Test get_summary and save_summary with JSONHistory."""
+    history = JSONHistory(path="histories_test")
+    chat_id = history.generate_chat_id()
+    
+    # Initially empty summary
+    summary = history.get_summary(chat_id)
+    assert summary.content == ""
+    assert summary.role == "system"
+    
+    # Save a summary
+    test_summary = "Conversation about Giuseppe"
+    history.save_summary(chat_id, test_summary)
+    
+    # Retrieve the summary
+    summary = history.get_summary(chat_id)
+    assert summary.content == test_summary
+
+def test_sqlite_history_summary():
+    """Test get_summary and save_summary with SQLiteHistory."""
+    from aidk.chat.history import SQLiteHistory
+    
+    history = SQLiteHistory(path="sqlite_histories_test/test.db")
+    chat_id = history.generate_chat_id()
+    
+    # Initially empty summary
+    summary = history.get_summary(chat_id)
+    assert summary.content == ""
+    assert summary.role == "system"
+    
+    # Save a summary
+    test_summary = "Conversation about Giuseppe"
+    history.save_summary(chat_id, test_summary)
+    
+    # Retrieve the summary
+    summary = history.get_summary(chat_id)
+    assert summary.content == test_summary
+
+def test_dict_history_clear():
+    """Test clear method with DictHistory."""
+    from aidk.chat.history import DictHistory
+    
+    history = DictHistory()
+    chat_id = history.generate_chat_id()
+    
+    # Add some messages
+    from aidk.chat.history.models import Message
+    messages = [Message(content="Hello", role="user")]
+    history.save_message(chat_id, messages)
+    
+    # Save a summary
+    history.save_summary(chat_id, "Test summary")
+    
+    # Verify data exists
+    assert len(history.get_messages(chat_id)) > 0
+    assert history.get_summary(chat_id).content == "Test summary"
+    
+    # Clear the chat
+    history.clear(chat_id)
+    
+    # Verify data is cleared
+    assert len(history.get_messages(chat_id)) == 0
+    assert history.get_summary(chat_id).content == ""
+
+def test_json_history_clear():
+    """Test clear method with JSONHistory."""
+    history = JSONHistory(path="histories_test")
+    chat_id = history.generate_chat_id()
+    
+    # Add some messages
+    from aidk.chat.history.models import Message
+    messages = [Message(content="Hello", role="user")]
+    history.save_message(chat_id, messages)
+    
+    # Save a summary
+    history.save_summary(chat_id, "Test summary")
+    
+    # Verify data exists
+    assert len(history.get_messages(chat_id)) > 0
+    assert history.get_summary(chat_id).content == "Test summary"
+    
+    # Clear the chat
+    history.clear(chat_id)
+    
+    # Verify data is cleared
+    assert len(history.get_messages(chat_id)) == 0
+    assert history.get_summary(chat_id).content == ""
+
+def test_sqlite_history_clear():
+    """Test clear method with SQLiteHistory."""
+    from aidk.chat.history import SQLiteHistory
+    
+    history = SQLiteHistory(path="sqlite_histories_test/test.db")
+    chat_id = history.generate_chat_id()
+    
+    # Add some messages
+    from aidk.chat.history.models import Message
+    messages = [Message(content="Hello", role="user")]
+    history.save_message(chat_id, messages)
+    
+    # Save a summary
+    history.save_summary(chat_id, "Test summary")
+    
+    # Verify data exists
+    assert len(history.get_messages(chat_id)) > 0
+    assert history.get_summary(chat_id).content == "Test summary"
+    
+    # Clear the chat
+    history.clear(chat_id)
+    
+    # Verify data is cleared
+    assert len(history.get_messages(chat_id)) == 0
+    assert history.get_summary(chat_id).content == ""
